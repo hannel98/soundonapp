@@ -12,13 +12,19 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.soundmesh.app",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Record vocals to transcribe into lyrics."
+        "NSMicrophoneUsageDescription": "Record vocals to transcribe into lyrics.",
+        "NSLocationWhenInUseUsageDescription": "Track miles and reward safe driving with $SOUND.",
+        "UIBackgroundModes": ["audio"]
       }
     },
     "android": {
       "package": "com.soundmesh.app",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.WAKE_LOCK"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",

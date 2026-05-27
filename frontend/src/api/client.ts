@@ -134,6 +134,16 @@ export const api = {
     }) as Promise<{ tokens_awarded: number; xp_awarded: number; new_best: boolean; balance: number }>,
   rhythmLeaderboard: (difficulty: "easy" | "normal" | "hard" = "normal", limit = 10) =>
     request(`/games/rhythm/leaderboard?difficulty=${difficulty}&limit=${limit}`),
+
+  // Albums + Social
+  createAlbum: (name: string, theme: string, track_titles: string[], style?: string) =>
+    request("/albums", { method: "POST", body: { name, theme, track_titles, style }, auth: true }),
+  myAlbums: () => request("/me/albums", { auth: true }),
+  feed: () => request("/feed", { auth: true }),
+  createPost: (text: string, attach?: { track_id?: string; album_id?: string; recording_id?: string }) =>
+    request("/posts", { method: "POST", body: { text, ...(attach || {}) }, auth: true }),
+  likePost: (postId: string) =>
+    request(`/posts/${postId}/like`, { method: "POST", auth: true }),
   sttUpload: async (uri: string, mimeType: string, language?: string) => {
     const token = await getToken();
     const form = new FormData();
@@ -163,6 +173,80 @@ export const api = {
   myStatuses: () => request("/me/statuses", { auth: true }),
   createStatus: (text: string) =>
     request("/me/statuses", { method: "POST", body: { text }, auth: true }),
+
+  // Smartcar
+  smartcarConnectUrl: (app_redirect?: string, mode?: string) =>
+    request("/smartcar/connect-url", {
+      method: "POST",
+      body: { app_redirect, mode },
+      auth: true,
+    }) as Promise<{ url: string; mode: string; redirect_uri: string }>,
+  smartcarStatus: () =>
+    request("/smartcar/status", { auth: true }) as Promise<{
+      connected: boolean;
+      mode?: string;
+      updated_at?: string;
+      expires_at?: string;
+      latest?: any;
+    }>,
+  smartcarVehicle: () => request("/smartcar/vehicle", { auth: true }),
+  smartcarDisconnect: () => request("/smartcar/disconnect", { method: "POST", auth: true }),
+  smartcarLogTrip: (trip: {
+    miles: number;
+    duration_s: number;
+    avg_speed_mph?: number;
+    max_speed_mph?: number;
+    hard_brake_events?: number;
+    hard_accel_events?: number;
+    speeding_seconds?: number;
+    night_driving_seconds?: number;
+    location_start?: { lat: number; lng: number };
+    location_end?: { lat: number; lng: number };
+  }) =>
+    request("/smartcar/log-trip", { method: "POST", body: trip, auth: true }) as Promise<{
+      trip: any;
+      safety_score: number;
+      sound_awarded: number;
+      balance: number | null;
+    }>,
+  smartcarTrips: (limit = 30) =>
+    request(`/smartcar/trips?limit=${limit}`, { auth: true }) as Promise<{ trips: any[]; stats: any }>,
+  smartcarMeshShare: (kind: "track" | "album" | "trip" | "chat", payload: any) =>
+    request("/smartcar/mesh/share", {
+      method: "POST",
+      body: { kind, payload },
+      auth: true,
+    }),
+  smartcarMeshIncoming: () =>
+    request("/smartcar/mesh/incoming", { auth: true }) as Promise<any[]>,
+
+  // IAP
+  iapCatalog: () =>
+    request("/iap/catalog") as Promise<{
+      token_packs: { product_id: string; tokens: number; price: string; label: string }[];
+      subscriptions: { product_id: string; price: string; duration_days: number; label: string }[];
+    }>,
+  iapValidate: (body: {
+    platform: "ios" | "android";
+    product_id: string;
+    transaction_id?: string;
+    purchase_token?: string;
+    receipt?: string;
+    is_subscription?: boolean;
+  }) =>
+    request("/iap/validate", { method: "POST", body, auth: true }) as Promise<{
+      ok: boolean;
+      already_processed: boolean;
+      granted: any;
+      balance: number | null;
+      verify_method?: string;
+    }>,
+  iapSubscription: () =>
+    request("/iap/subscription", { auth: true }) as Promise<{
+      active: boolean;
+      tier?: string;
+      expires_at?: string;
+    }>,
 };
 
 export type User = {

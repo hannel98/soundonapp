@@ -157,6 +157,19 @@ export default function Studio() {
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
 
+          <TouchableOpacity
+            testID="studio-album-gen-btn"
+            onPress={() => router.push("/albums/create" as any)}
+            style={styles.gameCta}
+          >
+            <Ionicons name="albums" size={20} color={colors.token} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gameCtaTitle}>AI Album Generator</Text>
+              <Text style={styles.gameCtaSub}>Bundle tracks + AI cover art • 3 $SOUND</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
           {generated && (
             <View style={styles.resultCard} testID="studio-generated">
               <Text style={styles.resultKicker}>GENERATED BEAT</Text>

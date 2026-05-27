@@ -21,6 +21,9 @@ import base64
 from pymongo import ReturnDocument
 from emergentintegrations.llm.openai.text_to_speech import OpenAITextToSpeech
 from emergentintegrations.llm.openai.speech_to_text import OpenAISpeechToText
+from emergentintegrations.llm.gemeni.image_generation import GeminiImageGeneration
+from routes import smartcar as smartcar_module
+from routes import iap as iap_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -221,7 +224,61 @@ class RecordingMeta(BaseModel):
 
 
 class RhythmStartBody(BaseModel):
-    difficulty: str = "normal"  # easy | normal | hard
+    difficulty: str = "normal"
+
+
+class AlbumCreateBody(BaseModel):
+    name: str
+    theme: str
+    track_titles: List[str]
+    style: Optional[str] = "modern, vibrant, abstract album cover"
+
+
+class AlbumPublic(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    theme: str
+    style: str
+    track_titles: List[str]
+    cover_base64: Optional[str] = None
+    cover_mime: str = "image/png"
+    created_at: str
+
+
+class PostCreateBody(BaseModel):
+    text: str
+    track_id: Optional[str] = None
+    album_id: Optional[str] = None
+    recording_id: Optional[str] = None
+
+
+class PostPublic(BaseModel):
+    id: str
+    user_id: str
+    display_name: str
+    avatar_url: Optional[str] = None
+    text: str
+    track_id: Optional[str] = None
+    album_id: Optional[str] = None
+    recording_id: Optional[str] = None
+    likes: int = 0
+    comments_count: int = 0
+    liked_by_me: bool = False
+    created_at: str
+
+
+class CommentCreateBody(BaseModel):
+    text: str
+
+
+class CommentPublic(BaseModel):
+    id: str
+    post_id: str
+    user_id: str
+    display_name: str
+    text: str
+    created_at: str
 
 
 class RhythmScoreBody(BaseModel):
@@ -247,6 +304,7 @@ ACTION_COSTS = {
     "save_recording": 1,
     "publish_album": 3,
     "go_live": 3,
+    "post": 0,
 }
 
 
@@ -698,6 +756,158 @@ async def get_costs(authorization: Optional[str] = Header(None)):
     return ACTION_COSTS
 
 
+# ---------- Albums (AI cover via Gemini Nano Banana) ----------
+@api_router.post("/albums", response_model=AlbumPublic)
+async def create_album(body: AlbumCreateBody, authorization: Optional[str] = Header(None)):
+    user = await resolve_user_from_authorization(authorization)
+    if not body.name.strip():
+        raise HTTPException(status_code=400, detail="name required")
+    if len(body.track_titles) < 1 or len(body.track_titles) > 30:
+        raise HTTPException(status_code=400, detail="track_titles must have 1..30 entries")
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=503, detail="LLM key not configured")
+    debited = await debit_tokens(user["user_id"], ACTION_COSTS["publish_album"], "publish_album", {"album_name": body.name})
+    cover_b64: Optional[str] = None
+    try:
+        gen = GeminiImageGeneration(api_key=EMERGENT_LLM_KEY)
+        prompt = (
+            f"Album cover art for '{body.name}'. Theme: {body.theme}. Style: {body.style}. "
+            f"Bold typography readable. No watermarks. Cinematic, music-album aesthetic."
+        )
+        images = await gen.generate_images(
+            prompt=prompt,
+            model="gemini-2.5-flash-image-preview",
+            number_of_images=1,
+        )
+        if images and images[0]:
+            cover_b64 = base64.b64encode(images[0]).decode("ascii")
+    except Exception as e:
+        logger.warning(f"Cover gen failed (continuing without image): {e}")
+        # Refund half on cover failure so the album still gets created
+        await credit_tokens(user["user_id"], 1, "publish_album_partial_refund", {"err": str(e)})
+    album_id = uuid.uuid4().hex
+    doc = {
+        "id": album_id,
+        "user_id": user["user_id"],
+        "name": body.name.strip()[:120],
+        "theme": body.theme.strip()[:280],
+        "style": body.style or "",
+        "track_titles": [t.strip()[:120] for t in body.track_titles if t.strip()],
+        "cover_base64": cover_b64,
+        "cover_mime": "image/png",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.albums.insert_one(doc)
+    return AlbumPublic(**{k: v for k, v in doc.items() if k != "_id"})
+
+
+@api_router.get("/me/albums", response_model=List[AlbumPublic])
+async def my_albums(authorization: Optional[str] = Header(None)):
+    user = await resolve_user_from_authorization(authorization)
+    docs = await db.albums.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return [AlbumPublic(**d) for d in docs]
+
+
+@api_router.get("/albums/{album_id}", response_model=AlbumPublic)
+async def get_album(album_id: str):
+    doc = await db.albums.find_one({"id": album_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="album not found")
+    return AlbumPublic(**doc)
+
+
+# ---------- Social Feed (posts + comments + likes) ----------
+@api_router.post("/posts", response_model=PostPublic)
+async def create_post(body: PostCreateBody, authorization: Optional[str] = Header(None)):
+    user = await resolve_user_from_authorization(authorization)
+    if not body.text.strip():
+        raise HTTPException(status_code=400, detail="text required")
+    doc = {
+        "id": uuid.uuid4().hex,
+        "user_id": user["user_id"],
+        "display_name": user.get("display_name") or user["email"].split("@")[0],
+        "avatar_url": user.get("avatar_url"),
+        "text": body.text.strip()[:600],
+        "track_id": body.track_id,
+        "album_id": body.album_id,
+        "recording_id": body.recording_id,
+        "likes": 0,
+        "comments_count": 0,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.posts.insert_one(doc)
+    out = {k: v for k, v in doc.items() if k != "_id"}
+    out["liked_by_me"] = False
+    return PostPublic(**out)
+
+
+@api_router.get("/feed", response_model=List[PostPublic])
+async def feed(authorization: Optional[str] = Header(None), limit: int = 30):
+    user: Optional[dict] = None
+    try:
+        user = await resolve_user_from_authorization(authorization)
+    except HTTPException:
+        user = None
+    docs = await db.posts.find({}, {"_id": 0}).sort("created_at", -1).limit(min(max(limit, 1), 100)).to_list(100)
+    liked_set: set = set()
+    if user:
+        likes = await db.post_likes.find({"user_id": user["user_id"]}, {"_id": 0, "post_id": 1}).to_list(500)
+        liked_set = {l["post_id"] for l in likes}
+    return [PostPublic(**{**d, "liked_by_me": d["id"] in liked_set}) for d in docs]
+
+
+@api_router.post("/posts/{post_id}/like")
+async def like_post(post_id: str, authorization: Optional[str] = Header(None)):
+    user = await resolve_user_from_authorization(authorization)
+    post = await db.posts.find_one({"id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="post not found")
+    existing = await db.post_likes.find_one({"post_id": post_id, "user_id": user["user_id"]})
+    if existing:
+        await db.post_likes.delete_one({"post_id": post_id, "user_id": user["user_id"]})
+        res = await db.posts.find_one_and_update(
+            {"id": post_id}, {"$inc": {"likes": -1}},
+            return_document=ReturnDocument.AFTER, projection={"_id": 0, "likes": 1},
+        )
+        return {"liked": False, "likes": max(0, (res or {}).get("likes", 0))}
+    await db.post_likes.insert_one({
+        "post_id": post_id, "user_id": user["user_id"], "created_at": now_utc().isoformat()
+    })
+    res = await db.posts.find_one_and_update(
+        {"id": post_id}, {"$inc": {"likes": 1}},
+        return_document=ReturnDocument.AFTER, projection={"_id": 0, "likes": 1},
+    )
+    return {"liked": True, "likes": (res or {}).get("likes", 1)}
+
+
+@api_router.get("/posts/{post_id}/comments", response_model=List[CommentPublic])
+async def list_comments(post_id: str):
+    docs = await db.post_comments.find({"post_id": post_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    return [CommentPublic(**d) for d in docs]
+
+
+@api_router.post("/posts/{post_id}/comments", response_model=CommentPublic)
+async def add_comment(post_id: str, body: CommentCreateBody, authorization: Optional[str] = Header(None)):
+    user = await resolve_user_from_authorization(authorization)
+    post = await db.posts.find_one({"id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="post not found")
+    if not body.text.strip():
+        raise HTTPException(status_code=400, detail="text required")
+    doc = {
+        "id": uuid.uuid4().hex,
+        "post_id": post_id,
+        "user_id": user["user_id"],
+        "display_name": user.get("display_name") or user["email"].split("@")[0],
+        "text": body.text.strip()[:400],
+        "created_at": now_utc().isoformat(),
+    }
+    await db.post_comments.insert_one(doc)
+    await db.posts.update_one({"id": post_id}, {"$inc": {"comments_count": 1}})
+    out = {k: v for k, v in doc.items() if k != "_id"}
+    return CommentPublic(**out)
+
+
 # ---------- Rhythm Tap Game ----------
 DIFFICULTY_CFG = {
     "easy":   {"bpm": 90,  "duration_ms": 30_000, "notes_per_beat": 0.5, "lanes": 4},
@@ -1040,6 +1250,12 @@ async def startup():
     await db.game_scores.create_index([("user_id", 1), ("game", 1)], unique=True)
     await db.game_scores.create_index([("game", 1), ("best_score", -1)])
     await db.game_runs.create_index([("user_id", 1), ("created_at", -1)])
+    await db.albums.create_index([("user_id", 1), ("created_at", -1)])
+    await db.albums.create_index("id", unique=True)
+    await db.posts.create_index([("created_at", -1)])
+    await db.posts.create_index("id", unique=True)
+    await db.post_likes.create_index([("post_id", 1), ("user_id", 1)], unique=True)
+    await db.post_comments.create_index([("post_id", 1), ("created_at", 1)])
     if await db.artists.count_documents({}) == 0:
         await db.artists.insert_many(SEED_ARTISTS)
     if await db.tracks.count_documents({}) == 0:
@@ -1050,6 +1266,15 @@ async def startup():
         await db.videos.insert_many(SEED_VIDEOS)
     if await db.news.count_documents({}) == 0:
         await db.news.insert_many(SEED_NEWS)
+    # Smartcar / IAP indexes
+    await db.smartcar_tokens.create_index("user_id", unique=True)
+    await db.vehicle_snapshots.create_index([("user_id", 1), ("created_at", -1)])
+    await db.driving_trips.create_index([("user_id", 1), ("created_at", -1)])
+    await db.driving_stats.create_index("user_id", unique=True)
+    await db.car_mesh.create_index([("created_at", -1)])
+    await db.iap_transactions.create_index([("platform", 1), ("tx_key", 1)], unique=True)
+    await db.iap_transactions.create_index([("user_id", 1), ("created_at", -1)])
+    await db.subscriptions.create_index("user_id", unique=True)
 
 
 @app.on_event("shutdown")
@@ -1057,6 +1282,17 @@ async def shutdown_db_client():
     client.close()
 
 
+# Register modular routers (Smartcar + IAP) - MUST run BEFORE include_router so they get mounted
+smartcar_module.register(api_router, {
+    "resolve_user": resolve_user_from_authorization,
+    "db": db,
+    "credit_tokens": credit_tokens,
+})
+iap_module.register(api_router, {
+    "resolve_user": resolve_user_from_authorization,
+    "db": db,
+    "credit_tokens": credit_tokens,
+})
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,

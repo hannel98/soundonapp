@@ -139,7 +139,8 @@ export default function Explore() {
       title: t.title,
       artist: t.artist,
       cover_url: t.cover_url,
-      external_url: t.permalink || stream || null,
+      external_url: t.permalink || null,
+      stream_url: stream,
     });
   };
 

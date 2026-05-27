@@ -1,29 +1,34 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Image, Linking } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { colors, radius } from "@/src/theme";
 
 export default function MiniPlayer() {
-  const { current, isPlaying, toggle, stop } = usePlayer();
+  const { current, isPlaying, isLoading, position, duration, toggle, stop } = usePlayer();
   if (!current) return null;
 
-  const openExternal = () => {
-    if (current.external_url) Linking.openURL(current.external_url).catch(() => {});
-  };
+  const progress = duration > 0 ? Math.min(1, Math.max(0, position / duration)) : 0;
 
   return (
-    <View style={styles.wrap} testID="mini-player">
-      <View style={styles.bar} pointerEvents="auto">
-        <TouchableOpacity style={styles.coverWrap} onPress={openExternal} testID="mini-player-cover">
+    <View style={styles.wrap} testID="mini-player" pointerEvents="box-none">
+      <View style={styles.bar}>
+        <View style={styles.coverWrap}>
           <Image source={{ uri: current.cover_url }} style={styles.cover} />
-        </TouchableOpacity>
+        </View>
         <View style={{ flex: 1 }}>
           <Text numberOfLines={1} style={styles.title}>{current.title}</Text>
           <Text numberOfLines={1} style={styles.artist}>{current.artist}</Text>
+          <View style={styles.progressBg}>
+            <View style={[styles.progressFg, { width: `${progress * 100}%` }]} />
+          </View>
         </View>
         <TouchableOpacity onPress={toggle} style={styles.iconBtn} testID="mini-player-toggle">
-          <Ionicons name={isPlaying ? "pause" : "play"} size={22} color="#0A0A0C" />
+          <Ionicons
+            name={isLoading ? "ellipsis-horizontal" : isPlaying ? "pause" : "play"}
+            size={22}
+            color="#0A0A0C"
+          />
         </TouchableOpacity>
         <TouchableOpacity onPress={stop} style={styles.closeBtn} testID="mini-player-close">
           <Ionicons name="close" size={18} color={colors.textSecondary} />
@@ -54,6 +59,14 @@ const styles = StyleSheet.create({
   cover: { width: "100%", height: "100%" },
   title: { color: colors.textPrimary, fontWeight: "700", fontSize: 14 },
   artist: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
+  progressBg: {
+    marginTop: 6,
+    height: 3,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressFg: { height: "100%", backgroundColor: colors.primary, borderRadius: 2 },
   iconBtn: {
     width: 40,
     height: 40,

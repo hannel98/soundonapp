@@ -224,6 +224,30 @@ export default function Profile() {
             </View>
           )}
 
+          {/* Quick-launch tiles */}
+          <View style={styles.tileGrid}>
+            <TouchableOpacity testID="tile-smartcar" style={styles.tile} onPress={() => router.push("/smartcar")}>
+              <Ionicons name="car-sport" size={26} color={colors.primary} />
+              <Text style={styles.tileLabel}>Drive to Earn</Text>
+              <Text style={styles.tileSub}>Smartcar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity testID="tile-store" style={styles.tile} onPress={() => router.push("/store")}>
+              <Ionicons name="cart" size={26} color={colors.primary} />
+              <Text style={styles.tileLabel}>Buy $SOUND</Text>
+              <Text style={styles.tileSub}>Store</Text>
+            </TouchableOpacity>
+            <TouchableOpacity testID="tile-album" style={styles.tile} onPress={() => router.push("/albums/create")}>
+              <Ionicons name="sparkles" size={26} color={colors.primary} />
+              <Text style={styles.tileLabel}>AI Album</Text>
+              <Text style={styles.tileSub}>Cover Generator</Text>
+            </TouchableOpacity>
+            <TouchableOpacity testID="tile-rhythm" style={styles.tile} onPress={() => router.push("/games/rhythm")}>
+              <Ionicons name="musical-notes" size={26} color={colors.primary} />
+              <Text style={styles.tileLabel}>Rhythm Tap</Text>
+              <Text style={styles.tileSub}>Mini-game</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Leaderboard */}
           <View style={styles.sectionHead}>
             <Text style={styles.sectionTitle}>🏆 Leaderboard</Text>
@@ -437,6 +461,19 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   claimText: { color: "#0A0A0C", fontWeight: "900", fontSize: 15 },
+  tileGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: spacing.lg, gap: 10, marginTop: 18 },
+  tile: {
+    width: "48%",
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    gap: 6,
+    minHeight: 96,
+  },
+  tileLabel: { color: "#fff", fontWeight: "800", fontSize: 15, marginTop: 4 },
+  tileSub: { color: colors.textTertiary, fontSize: 11 },
   sectionHead: { paddingHorizontal: spacing.lg, marginTop: 28, marginBottom: 12 },
   sectionTitle: { color: "#fff", fontSize: 18, fontWeight: "800" },
   sortRow: { flexDirection: "row", gap: 8, paddingHorizontal: spacing.lg, marginBottom: 10 },
