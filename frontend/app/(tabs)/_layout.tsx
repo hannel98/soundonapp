@@ -44,6 +44,14 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="collab"
+          options={{
+            title: "Collab",
+            tabBarIcon: ({ color, size }) => <Ionicons name="people-circle" color={color} size={size} />,
+            tabBarButtonTestID: "tab-collab",
+          }}
+        />
+        <Tabs.Screen
           name="news"
           options={{
             title: "Feed",

@@ -246,6 +246,21 @@ export default function Profile() {
               <Text style={styles.tileLabel}>Rhythm Tap</Text>
               <Text style={styles.tileSub}>Mini-game</Text>
             </TouchableOpacity>
+            <TouchableOpacity testID="tile-lyrics" style={styles.tile} onPress={() => router.push("/studio/lyrics")}>
+              <Ionicons name="document-text" size={26} color={colors.primary} />
+              <Text style={styles.tileLabel}>Lyrics AI</Text>
+              <Text style={styles.tileSub}>vs. Drake, Taylor…</Text>
+            </TouchableOpacity>
+            <TouchableOpacity testID="tile-wallet" style={styles.tile} onPress={() => router.push("/wallet")}>
+              <Ionicons name="wallet" size={26} color={colors.primary} />
+              <Text style={styles.tileLabel}>Wallet</Text>
+              <Text style={styles.tileSub}>Privy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity testID="tile-collab-mine" style={styles.tile} onPress={() => router.push("/collab/me")}>
+              <Ionicons name="people-circle" size={26} color={colors.primary} />
+              <Text style={styles.tileLabel}>My Collabs</Text>
+              <Text style={styles.tileSub}>Posts & apps</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Leaderboard */}

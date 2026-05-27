@@ -247,6 +247,60 @@ export const api = {
       tier?: string;
       expires_at?: string;
     }>,
+
+  // Collab finder
+  collabMeta: () =>
+    request("/collab/meta") as Promise<{
+      roles: string[];
+      genres: string[];
+      location_prefs: string[];
+      contact_types: string[];
+    }>,
+  collabList: (params?: { role?: string; genre?: string; location_pref?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.role) q.set("role", params.role);
+    if (params?.genre) q.set("genre", params.genre);
+    if (params?.location_pref) q.set("location_pref", params.location_pref);
+    if (params?.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request(`/collab/posts${qs ? `?${qs}` : ""}`) as Promise<any[]>;
+  },
+  collabCreate: (body: any) =>
+    request("/collab/posts", { method: "POST", body, auth: true }),
+  collabGet: (id: string) =>
+    request(`/collab/posts/${id}`, { auth: true }) as Promise<any>,
+  collabApply: (id: string, body: any) =>
+    request(`/collab/posts/${id}/apply`, { method: "POST", body, auth: true }),
+  collabApplications: (id: string) =>
+    request(`/collab/posts/${id}/applications`, { auth: true }) as Promise<any[]>,
+  collabRespond: (appId: string, action: "accept" | "decline") =>
+    request(`/collab/applications/${appId}/respond`, {
+      method: "POST",
+      body: { action },
+      auth: true,
+    }),
+  collabMine: () =>
+    request("/collab/me", { auth: true }) as Promise<{ posts: any[]; applications: any[] }>,
+
+  // Lyrics comparator
+  lyricsArtists: () =>
+    request("/lyrics/artists") as Promise<{ name: string; genre: string; keywords: string[] }[]>,
+  lyricsAnalyze: (body: { lyrics: string; artist: string; save?: boolean; title?: string }) =>
+    request("/lyrics/analyze", { method: "POST", body, auth: true }) as Promise<any>,
+  lyricsHistory: () => request("/lyrics/history", { auth: true }) as Promise<any[]>,
+
+  // Privy
+  privyStatus: () =>
+    request("/privy/status") as Promise<{ configured: boolean; app_id_present: boolean }>,
+  privyLogin: (id_token: string) =>
+    request("/privy/login", { method: "POST", body: { id_token } }) as Promise<{
+      access_token: string;
+      user_id: string;
+      email: string;
+      display_name?: string;
+    }>,
+  privyWallets: () =>
+    request("/privy/wallets", { auth: true }) as Promise<{ wallets: any[]; privy_did: string }>,
 };
 
 export type User = {

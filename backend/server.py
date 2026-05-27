@@ -24,6 +24,9 @@ from emergentintegrations.llm.openai.speech_to_text import OpenAISpeechToText
 from emergentintegrations.llm.gemeni.image_generation import GeminiImageGeneration
 from routes import smartcar as smartcar_module
 from routes import iap as iap_module
+from routes import collab as collab_module
+from routes import lyrics as lyrics_module
+from routes import privy as privy_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1275,6 +1278,13 @@ async def startup():
     await db.iap_transactions.create_index([("platform", 1), ("tx_key", 1)], unique=True)
     await db.iap_transactions.create_index([("user_id", 1), ("created_at", -1)])
     await db.subscriptions.create_index("user_id", unique=True)
+    # Collab + lyric analyses
+    await db.collab_posts.create_index([("status", 1), ("created_at", -1)])
+    await db.collab_posts.create_index("owner_id")
+    await db.collab_applications.create_index([("post_id", 1), ("applicant_id", 1)], unique=True)
+    await db.collab_applications.create_index("applicant_id")
+    await db.lyric_analyses.create_index([("user_id", 1), ("created_at", -1)])
+    await db.users.create_index("privy_did", sparse=True)
 
 
 @app.on_event("shutdown")
@@ -1292,6 +1302,20 @@ iap_module.register(api_router, {
     "resolve_user": resolve_user_from_authorization,
     "db": db,
     "credit_tokens": credit_tokens,
+})
+collab_module.register(api_router, {
+    "resolve_user": resolve_user_from_authorization,
+    "db": db,
+})
+lyrics_module.register(api_router, {
+    "resolve_user": resolve_user_from_authorization,
+    "db": db,
+})
+privy_module.register(api_router, {
+    "resolve_user": resolve_user_from_authorization,
+    "db": db,
+    "issue_jwt": issue_jwt,
+    "users_col": db.users,
 })
 app.include_router(api_router)
 app.add_middleware(
