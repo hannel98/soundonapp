@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 import httpx
 import bcrypt
 import jwt
+import random
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -28,6 +29,41 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'sound-mesh-jwt-secret-change-in-prod'
 JWT_ALGO = 'HS256'
 JWT_EXPIRES_DAYS = 7
 EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+
+# Audius public API — fetch discovery node list once, cache, fall back to stable node
+AUDIUS_FALLBACK = "https://discoveryprovider.audius.co"
+AUDIUS_APP_NAME = "SoundMesh"
+_audius_nodes: List[str] = []
+
+
+async def get_audius_node() -> str:
+    global _audius_nodes
+    if not _audius_nodes:
+        try:
+            async with httpx.AsyncClient(timeout=10) as c:
+                r = await c.get("https://api.audius.co")
+                data = r.json()
+                _audius_nodes = data.get("data", []) or []
+        except Exception:
+            _audius_nodes = []
+    return random.choice(_audius_nodes) if _audius_nodes else AUDIUS_FALLBACK
+
+
+async def audius_get(path: str, params: Optional[dict] = None) -> Any:
+    node = await get_audius_node()
+    p = dict(params or {})
+    p.setdefault("app_name", AUDIUS_APP_NAME)
+    url = f"{node}/v1{path}"
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(url, params=p)
+        if r.status_code >= 400:
+            # Retry once with fallback node
+            if node != AUDIUS_FALLBACK:
+                r2 = await c.get(f"{AUDIUS_FALLBACK}/v1{path}", params=p)
+                r2.raise_for_status()
+                return r2.json().get("data")
+            r.raise_for_status()
+        return r.json().get("data")
 
 app = FastAPI(title="Sound API")
 api_router = APIRouter(prefix="/api")
@@ -479,6 +515,62 @@ async def create_status(body: StatusCreate, authorization: Optional[str] = Heade
     await db.statuses.insert_one(doc)
     doc.pop("_id", None)
     return Status(**doc)
+
+
+# ---------- Routes: Audius ----------
+def _audius_track_to_dict(t: dict) -> dict:
+    user = t.get("user") or {}
+    artwork = t.get("artwork") or {}
+    cover = (
+        artwork.get("480x480")
+        or artwork.get("150x150")
+        or artwork.get("1000x1000")
+        or "https://images.pexels.com/photos/164938/pexels-photo-164938.jpeg?auto=compress&w=600"
+    )
+    return {
+        "id": t.get("id"),
+        "title": t.get("title") or "Untitled",
+        "artist": user.get("name") or user.get("handle") or "Unknown",
+        "artist_handle": user.get("handle"),
+        "genre": t.get("genre") or "",
+        "duration": t.get("duration") or 0,
+        "play_count": t.get("play_count") or 0,
+        "cover_url": cover,
+        "permalink": f"https://audius.co{t.get('permalink', '')}" if t.get("permalink") else None,
+    }
+
+
+@api_router.get("/audius/trending")
+async def audius_trending(genre: Optional[str] = None, limit: int = 20):
+    try:
+        params: dict = {"limit": min(max(limit, 1), 50)}
+        if genre:
+            params["genre"] = genre
+        data = await audius_get("/tracks/trending", params)
+        return [_audius_track_to_dict(t) for t in (data or [])]
+    except Exception as e:
+        logger.warning(f"Audius trending failed: {e}")
+        raise HTTPException(status_code=502, detail="Audius API unavailable")
+
+
+@api_router.get("/audius/search")
+async def audius_search(q: str, limit: int = 20):
+    if not q.strip():
+        return []
+    try:
+        data = await audius_get("/tracks/search", {"query": q, "limit": min(max(limit, 1), 50)})
+        return [_audius_track_to_dict(t) for t in (data or [])]
+    except Exception as e:
+        logger.warning(f"Audius search failed: {e}")
+        raise HTTPException(status_code=502, detail="Audius API unavailable")
+
+
+@api_router.get("/audius/track/{track_id}/stream")
+async def audius_stream_url(track_id: str):
+    """Return the streamable audio URL for an Audius track."""
+    node = await get_audius_node()
+    url = f"{node}/v1/tracks/{track_id}/stream?app_name={AUDIUS_APP_NAME}"
+    return {"stream_url": url}
 
 
 # ---------- Seed ----------

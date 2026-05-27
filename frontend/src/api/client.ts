@@ -59,6 +59,12 @@ export const api = {
   trending: (period: "24h" | "7d" = "24h") =>
     request(`/trending?period=${period}`),
 
+  audiusTrending: (limit = 20) => request(`/audius/trending?limit=${limit}`),
+  audiusSearch: (q: string, limit = 20) =>
+    request(`/audius/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  audiusStream: (track_id: string) =>
+    request(`/audius/track/${track_id}/stream`),
+
   progress: () => request("/me/progress", { auth: true }),
   claimDaily: () => request("/me/claim-daily", { method: "POST", auth: true }),
   myStatuses: () => request("/me/statuses", { auth: true }),

@@ -35,5 +35,13 @@ All interactive elements include `testID` for automated testing.
 ## Out of scope (deferred)
 - Mobile AdMob integration (user opted to skip ads for now).
 - Real AI beat generation (UI scaffolded; backend integration deferred).
-- Audio file playback (mini-player shows now-playing + opens external link instead of playing audio in-app — Apple Music/Spotify/YouTube licensing).
+- Audio file playback for non-Audius tracks (Apple Music/Spotify/YouTube/BeatStars are licensed, links open externally).
 - Push notifications.
+- Full Briar Headless mesh integration: not possible in Expo (Briar daemon is JVM desktop-only, `~/.briar/auth_token` is unreadable from a mobile sandbox). Shipped a best-effort `briar://share?text=...` deep-link + native Share-sheet fallback so users can hand a formatted "TRACK | ARTIST | URL" payload to the installed Briar Android app.
+
+## Audius integration (new in iter 2)
+- Backend proxy: `/api/audius/trending`, `/api/audius/search?q=`, `/api/audius/track/{id}/stream` — auto-discovers a healthy Audius discovery node from `https://api.audius.co`, falls back to `https://discoveryprovider.audius.co`.
+- Explore tab now has a dedicated "Audius" sub-tab (default) with live trending tracks, search bar, and per-track actions: play (sets MiniPlayer), Open on Audius (browser deep link), Share via Briar (mesh handoff).
+
+## Explore FlatList fix (bug from iter 1)
+- Each `<FlatList>` in Explore now has a unique `key` (audius/music/beats/videos) so React reconciler creates a fresh instance when switching sub-tabs, fixing the `numColumns` crash when going Beats ↔ Videos.

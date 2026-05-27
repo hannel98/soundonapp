@@ -13,8 +13,8 @@ export default function MiniPlayer() {
   };
 
   return (
-    <View style={styles.wrap} pointerEvents="box-none" testID="mini-player">
-      <View style={styles.bar}>
+    <View style={styles.wrap} testID="mini-player">
+      <View style={styles.bar} pointerEvents="auto">
         <TouchableOpacity style={styles.coverWrap} onPress={openExternal} testID="mini-player-cover">
           <Image source={{ uri: current.cover_url }} style={styles.cover} />
         </TouchableOpacity>
