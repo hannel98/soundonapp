@@ -4,6 +4,7 @@ import { View, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/src/theme";
 import MiniPlayer from "@/src/components/MiniPlayer";
+import HypeBanner from "@/src/components/HypeBanner";
 
 export default function TabsLayout() {
   return (
@@ -68,6 +69,9 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
+      <View style={styles.adSlot} pointerEvents="box-none">
+        <HypeBanner placement="16a7eb8c9e" />
+      </View>
       <MiniPlayer />
     </View>
   );
@@ -81,5 +85,11 @@ const styles = StyleSheet.create({
     height: 72,
     paddingBottom: 12,
     paddingTop: 8,
+  },
+  adSlot: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    bottom: 76,
   },
 });
