@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing } from "@/src/theme";
+import VoiceStudio from "@/src/components/VoiceStudio";
 
 const GENRES = ["Hip Hop", "Trap", "R&B", "Lo-Fi", "Drill", "House", "Afrobeats", "Pop"];
 const MOODS = ["Dark", "Uplifting", "Aggressive", "Chill", "Romantic", "Cinematic"];
@@ -182,6 +183,8 @@ export default function Studio() {
               </View>
             </View>
           )}
+
+          <VoiceStudio />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

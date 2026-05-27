@@ -10,10 +10,16 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.soundmesh.app"
+      "bundleIdentifier": "com.soundmesh.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Record vocals to transcribe into lyrics."
+      }
     },
     "android": {
       "package": "com.soundmesh.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0A0A0C"
@@ -37,7 +43,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#0A0A0C"
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

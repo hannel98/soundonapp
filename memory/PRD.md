@@ -32,6 +32,15 @@ Sound is an AI music creation & discovery platform, originally a web app at http
 ## Data Test IDs
 All interactive elements include `testID` for automated testing.
 
+## AI Voice (iter 3 — DONE)
+- Backend endpoints: `POST /api/ai/tts` (OpenAI tts-1, 9 voices, mp3 base64) and `POST /api/ai/stt` (OpenAI Whisper-1, multipart upload) via Emergent LLM key + `emergentintegrations` library.
+- Frontend `VoiceStudio` component on the Studio tab: type → generate → autoplay vocal via `expo-audio`; mic record → upload → transcript with full permission contract (`canAskAgain`, Open Settings fallback).
+- Verified round-trip: TTS audio → Whisper → exact text returned ("Hello from Sound. This is your AI vocalist.").
+
+## Mesh Phase 1 (iter 2.5 — DONE, Phase 2 PAUSED at user request)
+- `src/mesh/{types,serializer,chunker,crypto}.ts` shipped, 29/29 tests pass.
+- Phase 2 (BitChatAdapter + outbox + meshService) intentionally paused until items 1–6 of the AI roadmap complete.
+
 ## Out of scope (deferred)
 - Mobile AdMob integration (user opted to skip ads for now).
 - Real AI beat generation (UI scaffolded; backend integration deferred).
