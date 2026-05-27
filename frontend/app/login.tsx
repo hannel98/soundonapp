@@ -9,21 +9,64 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { useRouter, Link } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/src/context/AuthContext";
+import { PRIVY_AVAILABLE, usePrivyEmailLogin } from "@/src/auth/PrivyClient";
 import { colors, radius, spacing } from "@/src/theme";
 
 export default function Login() {
   const router = useRouter();
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, signInWithPrivyToken } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Privy state
+  const privyEmail = usePrivyEmailLogin();
+  const [privyMode, setPrivyMode] = useState<"idle" | "code">("idle");
+  const [privyEmailAddr, setPrivyEmailAddr] = useState("");
+  const [privyCode, setPrivyCode] = useState("");
+  const [privyLoading, setPrivyLoading] = useState(false);
+
+  const onPrivySend = async () => {
+    if (!privyEmailAddr.trim()) return Alert.alert("Email", "Enter an email");
+    if (!PRIVY_AVAILABLE) {
+      Alert.alert(
+        "Build required",
+        "Privy login only works in an iOS/Android dev build. Tap 'Publish' (top right) to build, then come back."
+      );
+      return;
+    }
+    setPrivyLoading(true);
+    try {
+      await privyEmail.sendCode(privyEmailAddr.trim());
+      setPrivyMode("code");
+    } catch (e: any) {
+      Alert.alert("Privy", e?.message || "Could not send code");
+    } finally {
+      setPrivyLoading(false);
+    }
+  };
+
+  const onPrivyVerify = async () => {
+    if (!privyCode.trim()) return Alert.alert("Code", "Enter the 6-digit code");
+    setPrivyLoading(true);
+    try {
+      const idToken = await privyEmail.loginWithCode(privyCode.trim());
+      await signInWithPrivyToken(idToken);
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      Alert.alert("Privy", e?.message || "Could not verify");
+    } finally {
+      setPrivyLoading(false);
+    }
+  };
 
   const onSubmit = async () => {
     setError(null);
@@ -138,6 +181,69 @@ export default function Login() {
               )}
             </TouchableOpacity>
 
+            {/* Privy email OTP login */}
+            <View style={styles.privyWrap}>
+              <Text style={styles.privyLabel}>Or with Privy (wallet + Web3)</Text>
+              {privyMode === "idle" ? (
+                <>
+                  <TextInput
+                    testID="privy-email-input"
+                    value={privyEmailAddr}
+                    onChangeText={setPrivyEmailAddr}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    placeholder="you@example.com"
+                    placeholderTextColor={colors.textTertiary}
+                    style={styles.input}
+                  />
+                  <TouchableOpacity
+                    testID="privy-send-btn"
+                    onPress={onPrivySend}
+                    disabled={privyLoading}
+                    style={[styles.privyBtn, privyLoading && { opacity: 0.6 }]}
+                  >
+                    {privyLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="wallet" size={18} color="#fff" />
+                        <Text style={styles.privyText}>Send code to email</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TextInput
+                    testID="privy-code-input"
+                    value={privyCode}
+                    onChangeText={setPrivyCode}
+                    keyboardType="number-pad"
+                    placeholder="6-digit code"
+                    placeholderTextColor={colors.textTertiary}
+                    style={styles.input}
+                    maxLength={6}
+                  />
+                  <TouchableOpacity
+                    testID="privy-verify-btn"
+                    onPress={onPrivyVerify}
+                    disabled={privyLoading}
+                    style={[styles.privyBtn, privyLoading && { opacity: 0.6 }]}
+                  >
+                    {privyLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.privyText}>Verify & Sign In</Text>}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setPrivyMode("idle"); setPrivyCode(""); }}>
+                    <Text style={styles.privyResend}>← Use a different email</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {!PRIVY_AVAILABLE && (
+                <Text style={styles.privyHint}>
+                  Privy login requires an iOS/Android dev build. Tap "Publish" (top right) to build.
+                </Text>
+              )}
+            </View>
+
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>New to Sound? </Text>
               <Link href="/signup" asChild>
@@ -213,6 +319,12 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   googleText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  privyWrap: { marginTop: 18, gap: 8, padding: 12, borderRadius: radius.md, borderColor: colors.border, borderWidth: 1, backgroundColor: "rgba(80,40,200,0.06)" },
+  privyLabel: { color: colors.textSecondary, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 },
+  privyBtn: { flexDirection: "row", gap: 8, backgroundColor: "#5028D0", borderRadius: radius.full, paddingVertical: 12, alignItems: "center", justifyContent: "center", minHeight: 44, marginTop: 6 },
+  privyText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  privyResend: { color: colors.textTertiary, fontSize: 12, marginTop: 6, textAlign: "center" },
+  privyHint: { color: colors.textTertiary, fontSize: 11, lineHeight: 16, marginTop: 6 },
   footerRow: { flexDirection: "row", justifyContent: "center", marginTop: 28 },
   footerText: { color: colors.textSecondary },
   linkText: { color: colors.primary, fontWeight: "700" },

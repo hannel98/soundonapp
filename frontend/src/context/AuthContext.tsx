@@ -10,6 +10,7 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithPrivyToken: (idToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -81,6 +82,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   };
 
+  const signInWithPrivyToken = async (idToken: string) => {
+    // Exchange Privy id_token for our internal JWT via /api/privy/login
+    const res = await api.privyLogin(idToken);
+    await setToken(res.access_token);
+    await refresh();
+  };
+
   const signOut = async () => {
     try {
       await api.logout();
@@ -90,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signInWithGoogle, signOut, refresh }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signInWithGoogle, signInWithPrivyToken, signOut, refresh }}>
       {children}
     </AuthContext.Provider>
   );

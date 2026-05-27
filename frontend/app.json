@@ -58,7 +58,8 @@
     "extra": {
       "eas": {
         "projectId": ""
-      }
+      },
+      "privyAppId": "cmph5sy0r00om0bldredscqru"
     }
   }
 }
