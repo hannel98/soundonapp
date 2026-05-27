@@ -24,7 +24,7 @@ export default function TabsLayout() {
           options={{
             title: "Home",
             tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
-            tabBarTestID: "tab-home",
+            tabBarButtonTestID: "tab-home",
           }}
         />
         <Tabs.Screen
@@ -32,7 +32,7 @@ export default function TabsLayout() {
           options={{
             title: "Studio",
             tabBarIcon: ({ color, size }) => <Ionicons name="musical-notes" color={color} size={size} />,
-            tabBarTestID: "tab-studio",
+            tabBarButtonTestID: "tab-studio",
           }}
         />
         <Tabs.Screen
@@ -40,7 +40,7 @@ export default function TabsLayout() {
           options={{
             title: "Explore",
             tabBarIcon: ({ color, size }) => <Ionicons name="compass" color={color} size={size} />,
-            tabBarTestID: "tab-explore",
+            tabBarButtonTestID: "tab-explore",
           }}
         />
         <Tabs.Screen
@@ -48,7 +48,7 @@ export default function TabsLayout() {
           options={{
             title: "News",
             tabBarIcon: ({ color, size }) => <Ionicons name="newspaper" color={color} size={size} />,
-            tabBarTestID: "tab-news",
+            tabBarButtonTestID: "tab-news",
           }}
         />
         <Tabs.Screen
@@ -56,7 +56,7 @@ export default function TabsLayout() {
           options={{
             title: "Profile",
             tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" color={color} size={size} />,
-            tabBarTestID: "tab-profile",
+            tabBarButtonTestID: "tab-profile",
           }}
         />
       </Tabs>
