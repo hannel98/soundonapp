@@ -109,6 +109,31 @@ export const api = {
     return data;
   },
   myRecordings: () => request("/me/recordings", { auth: true }),
+
+  rhythmStart: (difficulty: "easy" | "normal" | "hard" = "normal") =>
+    request("/games/rhythm/start", { method: "POST", body: { difficulty }, auth: true }) as Promise<{
+      seed: string;
+      difficulty: string;
+      bpm: number;
+      lanes: number;
+      duration_ms: number;
+      notes: { t_ms: number; lane: number }[];
+    }>,
+  rhythmSubmit: (
+    seed: string,
+    difficulty: string,
+    score: number,
+    max_combo: number,
+    accuracy: number,
+    duration_ms: number
+  ) =>
+    request("/games/rhythm/submit", {
+      method: "POST",
+      body: { seed, difficulty, score, max_combo, accuracy, duration_ms },
+      auth: true,
+    }) as Promise<{ tokens_awarded: number; xp_awarded: number; new_best: boolean; balance: number }>,
+  rhythmLeaderboard: (difficulty: "easy" | "normal" | "hard" = "normal", limit = 10) =>
+    request(`/games/rhythm/leaderboard?difficulty=${difficulty}&limit=${limit}`),
   sttUpload: async (uri: string, mimeType: string, language?: string) => {
     const token = await getToken();
     const form = new FormData();

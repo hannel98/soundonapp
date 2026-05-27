@@ -32,6 +32,13 @@ Sound is an AI music creation & discovery platform, originally a web app at http
 ## Data Test IDs
 All interactive elements include `testID` for automated testing.
 
+## Beat Game — Rhythm Tap (iter 5 — DONE)
+- Backend: `POST /api/games/rhythm/start` (deterministic seed → notes[]), `POST /api/games/rhythm/submit` (server-side sanity bounds, awards $SOUND + XP, tracks personal best), `GET /api/games/rhythm/leaderboard?difficulty=...`.
+- Frontend: `/games/rhythm` screen — difficulty selector (easy/normal/hard), 4-lane falling-note playfield with 30Hz game loop, perfect/great/ok/miss windows, combo multiplier (caps at 50× combo for 2× score), HUD with score/combo/timer, end-of-run modal showing score breakdown + $SOUND earned + new-best flag.
+- Studio tab now has a "Beat Game: Rhythm Tap" CTA pushing to the game.
+- Reward formula: 1 $SOUND per 200 pts (cap 25) + 5 bonus at ≥95% accuracy; XP = score/50.
+- New collections: `game_scores` (unique per user+game), `game_runs` (full run log).
+
 ## Token Economy + Leaderboard + In-app Recording (iter 4 — DONE)
 - Backend ledger: `token_transactions` collection, `debit_tokens(...)` / `credit_tokens(...)` helpers with atomic `find_one_and_update` + `$gte` guard (insufficient balance → 402). Per-action cost map: `tts=1, stt=1, save_recording=1, publish_album=3, go_live=3`. Refund on provider failure.
 - `/api/leaderboard?sort=balance|streak|xp&limit=N` — aggregate over `progress` + `users` lookup, returns `LeaderEntry[]` with rank, name, avatar, metric.

@@ -16,6 +16,7 @@ import httpx
 import bcrypt
 import jwt
 import random
+import base64
 
 from pymongo import ReturnDocument
 from emergentintegrations.llm.openai.text_to_speech import OpenAITextToSpeech
@@ -217,6 +218,19 @@ class RecordingMeta(BaseModel):
     mime_type: str
     size_bytes: int
     created_at: str
+
+
+class RhythmStartBody(BaseModel):
+    difficulty: str = "normal"  # easy | normal | hard
+
+
+class RhythmScoreBody(BaseModel):
+    seed: str
+    difficulty: str
+    score: int
+    max_combo: int
+    accuracy: float  # 0..1
+    duration_ms: int
 
 
 class TTSBody(BaseModel):
@@ -684,6 +698,151 @@ async def get_costs(authorization: Optional[str] = Header(None)):
     return ACTION_COSTS
 
 
+# ---------- Rhythm Tap Game ----------
+DIFFICULTY_CFG = {
+    "easy":   {"bpm": 90,  "duration_ms": 30_000, "notes_per_beat": 0.5, "lanes": 4},
+    "normal": {"bpm": 120, "duration_ms": 30_000, "notes_per_beat": 1.0, "lanes": 4},
+    "hard":   {"bpm": 150, "duration_ms": 30_000, "notes_per_beat": 1.5, "lanes": 4},
+}
+
+
+@api_router.post("/games/rhythm/start")
+async def rhythm_start(body: RhythmStartBody, authorization: Optional[str] = Header(None)):
+    await resolve_user_from_authorization(authorization)
+    cfg = DIFFICULTY_CFG.get(body.difficulty, DIFFICULTY_CFG["normal"])
+    seed = secrets.token_urlsafe(8)
+    rng = random.Random(seed)
+    # Generate note pattern. Beat interval = 60_000 / bpm ms.
+    interval_ms = int(60_000 / cfg["bpm"])
+    total_notes = int((cfg["duration_ms"] / interval_ms) * cfg["notes_per_beat"])
+    notes = []
+    t = 800  # 800ms grace before first note
+    for _ in range(total_notes):
+        notes.append({"t_ms": t, "lane": rng.randint(0, cfg["lanes"] - 1)})
+        # Sometimes add a 2-note chord on hard
+        if body.difficulty == "hard" and rng.random() < 0.15:
+            second_lane = rng.randint(0, cfg["lanes"] - 1)
+            if second_lane != notes[-1]["lane"]:
+                notes.append({"t_ms": t, "lane": second_lane})
+        # Stagger next note: interval +/- jitter
+        jitter = rng.randint(-60, 80)
+        t += max(180, interval_ms + jitter)
+        if t > cfg["duration_ms"] - 600:
+            break
+    return {
+        "seed": seed,
+        "difficulty": body.difficulty,
+        "bpm": cfg["bpm"],
+        "lanes": cfg["lanes"],
+        "duration_ms": cfg["duration_ms"],
+        "notes": notes,
+    }
+
+
+@api_router.post("/games/rhythm/submit")
+async def rhythm_submit(body: RhythmScoreBody, authorization: Optional[str] = Header(None)):
+    user = await resolve_user_from_authorization(authorization)
+    # Server-side sanity: reject obviously bogus scores
+    if not 0.0 <= body.accuracy <= 1.0:
+        raise HTTPException(status_code=400, detail="accuracy out of range")
+    if body.score < 0 or body.score > 500_000:
+        raise HTTPException(status_code=400, detail="score out of range")
+    if body.duration_ms < 5000 or body.duration_ms > 180_000:
+        raise HTTPException(status_code=400, detail="duration_ms out of range")
+
+    # $SOUND reward formula: 1 token per 200 points, capped at 25, +5 bonus for >=95% accuracy
+    reward = min(body.score // 200, 25)
+    if body.accuracy >= 0.95:
+        reward += 5
+    xp_gain = body.score // 50
+
+    # Update best score per user/difficulty
+    key = f"rhythm_{body.difficulty}"
+    prev = await db.game_scores.find_one(
+        {"user_id": user["user_id"], "game": key},
+        {"_id": 0},
+    )
+    is_new_best = (not prev) or body.score > prev.get("best_score", 0)
+    if is_new_best:
+        await db.game_scores.update_one(
+            {"user_id": user["user_id"], "game": key},
+            {"$set": {
+                "user_id": user["user_id"],
+                "game": key,
+                "best_score": body.score,
+                "best_accuracy": body.accuracy,
+                "best_combo": body.max_combo,
+                "updated_at": now_utc().isoformat(),
+            }},
+            upsert=True,
+        )
+
+    # Always log the run
+    await db.game_runs.insert_one({
+        "id": uuid.uuid4().hex,
+        "user_id": user["user_id"],
+        "game": key,
+        "seed": body.seed,
+        "score": body.score,
+        "max_combo": body.max_combo,
+        "accuracy": body.accuracy,
+        "duration_ms": body.duration_ms,
+        "created_at": now_utc().isoformat(),
+    })
+
+    # Award XP via direct progress update; tokens via credit_tokens
+    if xp_gain > 0:
+        await db.progress.update_one(
+            {"user_id": user["user_id"]},
+            {"$inc": {"xp": xp_gain}},
+            upsert=False,
+        )
+    credited = None
+    if reward > 0:
+        credited = await credit_tokens(
+            user["user_id"], reward, "rhythm_game", {"score": body.score, "difficulty": body.difficulty}
+        )
+
+    bal = credited["progress"]["sound_balance"] if credited else (await db.progress.find_one({"user_id": user["user_id"]}, {"_id": 0}))["sound_balance"]
+    return {
+        "tokens_awarded": reward,
+        "xp_awarded": xp_gain,
+        "new_best": is_new_best,
+        "balance": bal,
+    }
+
+
+@api_router.get("/games/rhythm/leaderboard")
+async def rhythm_leaderboard(difficulty: str = "normal", limit: int = 20):
+    key = f"rhythm_{difficulty}"
+    pipeline = [
+        {"$match": {"game": key}},
+        {"$sort": {"best_score": -1}},
+        {"$limit": min(max(limit, 1), 100)},
+        {"$lookup": {"from": "users", "localField": "user_id", "foreignField": "user_id", "as": "u"}},
+        {"$unwind": {"path": "$u", "preserveNullAndEmptyArrays": True}},
+        {"$project": {
+            "_id": 0,
+            "user_id": 1,
+            "best_score": 1,
+            "best_accuracy": 1,
+            "best_combo": 1,
+            "display_name": {"$ifNull": ["$u.display_name", "$user_id"]},
+            "avatar_url": "$u.avatar_url",
+        }},
+    ]
+    rows = await db.game_scores.aggregate(pipeline).to_list(100)
+    return [{
+        "rank": i + 1,
+        "user_id": r["user_id"],
+        "display_name": r.get("display_name") or r["user_id"],
+        "avatar_url": r.get("avatar_url"),
+        "best_score": r.get("best_score", 0),
+        "best_accuracy": r.get("best_accuracy", 0),
+        "best_combo": r.get("best_combo", 0),
+    } for i, r in enumerate(rows)]
+
+
 # ---------- Audius ----------
 def _audius_track_to_dict(t: dict) -> dict:
     user = t.get("user") or {}
@@ -878,6 +1037,9 @@ async def startup():
     await db.token_transactions.create_index([("user_id", 1), ("created_at", -1)])
     await db.recordings.create_index([("user_id", 1), ("created_at", -1)])
     await db.recordings.create_index("id", unique=True)
+    await db.game_scores.create_index([("user_id", 1), ("game", 1)], unique=True)
+    await db.game_scores.create_index([("game", 1), ("best_score", -1)])
+    await db.game_runs.create_index([("user_id", 1), ("created_at", -1)])
     if await db.artists.count_documents({}) == 0:
         await db.artists.insert_many(SEED_ARTISTS)
     if await db.tracks.count_documents({}) == 0:

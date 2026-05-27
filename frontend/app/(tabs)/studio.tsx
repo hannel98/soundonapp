@@ -12,6 +12,7 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing } from "@/src/theme";
 import VoiceStudio from "@/src/components/VoiceStudio";
@@ -21,6 +22,7 @@ const MOODS = ["Dark", "Uplifting", "Aggressive", "Chill", "Romantic", "Cinemati
 const BPMS = [80, 90, 110, 128, 140, 160];
 
 export default function Studio() {
+  const router = useRouter();
   const [genre, setGenre] = useState("Hip Hop");
   const [mood, setMood] = useState("Dark");
   const [bpm, setBpm] = useState(128);
@@ -140,6 +142,19 @@ export default function Studio() {
                 <Text style={styles.ctaText}>Generate Beat</Text>
               </>
             )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="studio-rhythm-game-btn"
+            onPress={() => router.push("/games/rhythm" as any)}
+            style={styles.gameCta}
+          >
+            <Ionicons name="game-controller" size={20} color="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gameCtaTitle}>Beat Game: Rhythm Tap</Text>
+              <Text style={styles.gameCtaSub}>Hit the lanes • earn $SOUND</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
 
           {generated && (
@@ -271,6 +286,21 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   ctaText: { color: "#0A0A0C", fontWeight: "900", fontSize: 16, letterSpacing: 0.5 },
+  gameCta: {
+    marginHorizontal: spacing.lg,
+    marginTop: 12,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 56,
+  },
+  gameCtaTitle: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  gameCtaSub: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
   resultCard: {
     marginHorizontal: spacing.lg,
     marginTop: 18,
