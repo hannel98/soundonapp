@@ -1,0 +1,104 @@
+{
+  "design_system": {
+    "identity": {
+      "persona": "E1: The Anti-AI Designer",
+      "archetype": "Archetype 5 (Luxury) mixed with Web3 Tokenomics",
+      "theme": "Dark",
+      "vibe": "Cinematic, deep void, expensive feel with intense electric accents for gamification."
+    },
+    "colors": {
+      "background": {
+        "base": "#0A0A0C",
+        "surface": "#141417",
+        "elevated": "#1C1C20"
+      },
+      "brand": {
+        "primary": "#FFB800",
+        "accent": "#FF3B30",
+        "token": "#00FF66"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#A0A0A5",
+        "tertiary": "#5C5C62"
+      },
+      "borders": {
+        "subtle": "rgba(255, 255, 255, 0.08)"
+      }
+    },
+    "typography": {
+      "fonts": {
+        "heading": "Outfit, system-ui",
+        "body": "Inter, system-ui",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "scale": {
+        "h1": { "fontSize": 40, "lineHeight": 48, "tracking": "-0.04em", "weight": "900" },
+        "h2": { "fontSize": 32, "lineHeight": 40, "tracking": "-0.02em", "weight": "800" },
+        "h3": { "fontSize": 24, "lineHeight": 32, "tracking": "-0.01em", "weight": "700" },
+        "body": { "fontSize": 16, "lineHeight": 24, "weight": "400" },
+        "label": { "fontSize": 12, "lineHeight": 16, "tracking": "0.1em", "weight": "600", "textTransform": "uppercase" }
+      }
+    },
+    "layout_strategy": {
+      "padding": "Generous. Use 24px (1.5rem) as standard screen padding.",
+      "touch_targets": "Min 44x44px for all hitboxes.",
+      "cards": "Cardless mostly. Use 1px subtle borders and varying background shades rather than drop shadows. If using cards, use 16px border radius.",
+      "navigation": "Bottom Tab Navigation with absolute positioning, heavily blurred background (Glassmorphism), and neon indicator for active tab."
+    },
+    "components": {
+      "mini_player": "Floating exactly above the bottom nav. Blur background, compact layout, white text, primary accent for progress bar.",
+      "token_badge": "Neumorphic dark button or glowing border (Tracing Beam style). Use the token accent color (#00FF66) to indicate $SOUND balance.",
+      "artist_cover": "Max 80vh height for hero covers. Linear gradient overlay from black to transparent for readable text.",
+      "data_testid": "ALL interactive elements MUST include testID attribute."
+    }
+  },
+  "features_architecture": [
+    "Home / Feed: Featured Artists & Music (Tremayne, Lil Mizzy, Lashellz, etc.)",
+    "Music & Beats Browser: Audio player, Trending Sounds, Track Lists",
+    "AI Studio: Create beats, production tips, AI generation input",
+    "Music Industry News: Articles on AI music, streaming, NFTs",
+    "Profile & Gamification: Status updates, Daily streak, Milestones, $SOUND token balance",
+    "External Links: YouTube, Apple Music, Spotify embeds/links"
+  ],
+  "media_assets": {
+    "image_urls": [
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/25f7cda1-22ab-49ec-90b1-23330ae8853e/images/cd7f5ff4e0c30622e2f297bbcb2ead4eef851b484330214cc95c2cb7d46fb4be.png",
+        "description": "Abstract 3D sound wave, deep void background, cinematic amber glow",
+        "category": "hero_background_ai_studio"
+      },
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/25f7cda1-22ab-49ec-90b1-23330ae8853e/images/a63315ab7b5845f8c21cf08d0a3183c87b3bf9d4bcb8258c6c42d2f53081c2a2.png",
+        "description": "Premium DJ mixer with cinematic orange glow",
+        "category": "equipment_hero"
+      },
+      {
+        "url": "https://images.pexels.com/photos/5749193/pexels-photo-5749193.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Music producer in studio",
+        "category": "artist_profile_placeholder"
+      },
+      {
+        "url": "https://img.youtube.com/vi/90A4IMPOmio/maxresdefault.jpg",
+        "description": "Tremayne thumbnail",
+        "category": "featured_artist"
+      },
+      {
+        "url": "https://customer-assets.emergentagent.com/job_musicaads/artifacts/g4gpgdkx_IMG_4352.jpeg",
+        "description": "Greater Good Logo",
+        "category": "brand_logo"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Create a React Native Expo application. DO NOT build a web application.",
+    "Use standard React Native components (View, Text, Image, ScrollView, FlatList).",
+    "Implement React Navigation with 5 bottom tabs: Home, Studio, Explore, News, Profile.",
+    "Apply the exact dark mode colors defined in design_system.colors. No light mode.",
+    "All tap targets (TouchableOpacity/Pressable) must have a minimum height/width of 44px.",
+    "Add 'testID' attributes to all interactive elements for testing.",
+    "Implement the global floating mini-player above the bottom tab bar.",
+    "Integrate the token gamification UI in the profile and as a header badge.",
+    "For icons, use @expo/vector-icons (e.g., LucideIcons, Ionicons, or Feather)."
+  ]
+}
