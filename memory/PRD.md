@@ -32,6 +32,15 @@ Sound is an AI music creation & discovery platform, originally a web app at http
 ## Data Test IDs
 All interactive elements include `testID` for automated testing.
 
+## Token Economy + Leaderboard + In-app Recording (iter 4 — DONE)
+- Backend ledger: `token_transactions` collection, `debit_tokens(...)` / `credit_tokens(...)` helpers with atomic `find_one_and_update` + `$gte` guard (insufficient balance → 402). Per-action cost map: `tts=1, stt=1, save_recording=1, publish_album=3, go_live=3`. Refund on provider failure.
+- `/api/leaderboard?sort=balance|streak|xp&limit=N` — aggregate over `progress` + `users` lookup, returns `LeaderEntry[]` with rank, name, avatar, metric.
+- `/api/me/recordings` POST (multipart upload, base64-stored) + GET (list w/o audio body) + `/{id}/audio` (fetch one). 1 token to save a take.
+- `/api/me/transactions` + `/api/me/costs` for the wallet UI.
+- New users start with **50 $SOUND** so they can try things immediately.
+- VoiceStudio now has a Transcribe / Save toggle. Save mode writes the take to backend and shows "Saved 'Take HH:MM:SS' • N KB".
+- Profile tab shows a 🏆 Leaderboard with sort chips (🥇🥈🥉 medals), highlighting "(you)" if you're in the top 10.
+
 ## AI Voice (iter 3 — DONE)
 - Backend endpoints: `POST /api/ai/tts` (OpenAI tts-1, 9 voices, mp3 base64) and `POST /api/ai/stt` (OpenAI Whisper-1, multipart upload) via Emergent LLM key + `emergentintegrations` library.
 - Frontend `VoiceStudio` component on the Studio tab: type → generate → autoplay vocal via `expo-audio`; mic record → upload → transcript with full permission contract (`canAskAgain`, Open Settings fallback).

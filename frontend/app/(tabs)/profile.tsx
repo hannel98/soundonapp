@@ -39,11 +39,23 @@ type Status = {
   created_at: string;
 };
 
+type LeaderEntry = {
+  rank: number;
+  user_id: string;
+  display_name: string;
+  avatar_url?: string | null;
+  sound_balance: number;
+  streak: number;
+  xp: number;
+};
+
 export default function Profile() {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const [progress, setProgress] = useState<Progress | null>(null);
   const [statuses, setStatuses] = useState<Status[]>([]);
+  const [leaders, setLeaders] = useState<LeaderEntry[]>([]);
+  const [leaderSort, setLeaderSort] = useState<"balance" | "streak" | "xp">("balance");
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
   const [statusText, setStatusText] = useState("");
@@ -51,9 +63,14 @@ export default function Profile() {
 
   const load = async () => {
     try {
-      const [p, s] = await Promise.all([api.progress(), api.myStatuses()]);
+      const [p, s, lb] = await Promise.all([
+        api.progress(),
+        api.myStatuses(),
+        api.leaderboard(leaderSort, 10).catch(() => []),
+      ]);
       setProgress(p);
       setStatuses(s);
+      setLeaders(lb);
     } catch {}
     finally {
       setLoading(false);
@@ -62,7 +79,12 @@ export default function Profile() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    api.leaderboard(leaderSort, 10).then(setLeaders).catch(() => {});
+  }, [leaderSort]);
 
   const onClaim = async () => {
     setClaiming(true);
@@ -201,6 +223,56 @@ export default function Profile() {
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Leaderboard */}
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>🏆 Leaderboard</Text>
+          </View>
+          <View style={styles.sortRow}>
+            {(["balance", "streak", "xp"] as const).map((s) => (
+              <TouchableOpacity
+                key={s}
+                testID={`leader-sort-${s}`}
+                onPress={() => setLeaderSort(s)}
+                style={[styles.sortBtn, leaderSort === s && styles.sortBtnActive]}
+              >
+                <Text style={[styles.sortText, leaderSort === s && styles.sortTextActive]}>
+                  {s === "balance" ? "$SOUND" : s.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={{ paddingHorizontal: spacing.lg, gap: 8 }}>
+            {leaders.length === 0 ? (
+              <Text style={styles.emptyText}>No rankings yet.</Text>
+            ) : (
+              leaders.map((l) => {
+                const isMe = l.user_id === user?.user_id;
+                const metric =
+                  leaderSort === "balance"
+                    ? `${l.sound_balance} $SOUND`
+                    : leaderSort === "streak"
+                    ? `🔥 ${l.streak}`
+                    : `${l.xp} XP`;
+                return (
+                  <View
+                    key={l.user_id}
+                    testID={`leader-row-${l.rank}`}
+                    style={[styles.leaderRow, isMe && styles.leaderRowMe]}
+                  >
+                    <Text style={[styles.leaderRank, l.rank === 1 && { color: colors.primary }]}>
+                      {l.rank === 1 ? "🥇" : l.rank === 2 ? "🥈" : l.rank === 3 ? "🥉" : `#${l.rank}`}
+                    </Text>
+                    <Text style={styles.leaderName} numberOfLines={1}>
+                      {l.display_name}
+                      {isMe ? "  (you)" : ""}
+                    </Text>
+                    <Text style={styles.leaderMetric}>{metric}</Text>
+                  </View>
+                );
+              })
+            )}
+          </View>
 
           {/* Status compose */}
           <View style={styles.sectionHead}>
@@ -367,6 +439,34 @@ const styles = StyleSheet.create({
   claimText: { color: "#0A0A0C", fontWeight: "900", fontSize: 15 },
   sectionHead: { paddingHorizontal: spacing.lg, marginTop: 28, marginBottom: 12 },
   sectionTitle: { color: "#fff", fontSize: 18, fontWeight: "800" },
+  sortRow: { flexDirection: "row", gap: 8, paddingHorizontal: spacing.lg, marginBottom: 10 },
+  sortBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 30,
+    justifyContent: "center",
+  },
+  sortBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  sortText: { color: colors.textSecondary, fontWeight: "700", fontSize: 11 },
+  sortTextActive: { color: "#0A0A0C", fontWeight: "800" },
+  leaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.surface,
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  leaderRowMe: { borderColor: colors.primary, backgroundColor: "rgba(255,184,0,0.06)" },
+  leaderRank: { width: 36, color: colors.textTertiary, fontWeight: "900", fontSize: 14 },
+  leaderName: { flex: 1, color: "#fff", fontWeight: "700", fontSize: 14 },
+  leaderMetric: { color: colors.token, fontWeight: "900", fontSize: 13 },
   composeWrap: {
     flexDirection: "row",
     marginHorizontal: spacing.lg,

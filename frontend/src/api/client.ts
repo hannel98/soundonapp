@@ -79,7 +79,36 @@ export const api = {
       mime_type: string;
       voice: string;
       model: string;
+      tokens_spent?: number;
+      balance?: number;
     }>,
+  leaderboard: (sort: "balance" | "streak" | "xp" = "balance", limit = 20) =>
+    request(`/leaderboard?sort=${sort}&limit=${limit}`),
+  costs: () => request("/me/costs", { auth: true }) as Promise<Record<string, number>>,
+  transactions: () => request("/me/transactions", { auth: true }),
+  saveRecording: async (uri: string, mimeType: string, title: string, durationMs: number) => {
+    const token = await getToken();
+    const form = new FormData();
+    if (uri.startsWith("blob:") || uri.startsWith("data:")) {
+      const blob = await (await fetch(uri)).blob();
+      form.append("audio", blob, filenameForMime(mimeType));
+    } else {
+      // @ts-ignore - RN-only form field shape
+      form.append("audio", { uri, name: filenameForMime(mimeType), type: mimeType });
+    }
+    form.append("title", title);
+    form.append("duration_ms", String(durationMs));
+    const res = await fetch(`${BASE}/api/me/recordings`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form as any,
+    });
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!res.ok) throw new Error((data && (data.detail || data.message)) || `HTTP ${res.status}`);
+    return data;
+  },
+  myRecordings: () => request("/me/recordings", { auth: true }),
   sttUpload: async (uri: string, mimeType: string, language?: string) => {
     const token = await getToken();
     const form = new FormData();

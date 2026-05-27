@@ -17,6 +17,7 @@ import bcrypt
 import jwt
 import random
 
+from pymongo import ReturnDocument
 from emergentintegrations.llm.openai.text_to_speech import OpenAITextToSpeech
 from emergentintegrations.llm.openai.speech_to_text import OpenAISpeechToText
 
@@ -188,11 +189,120 @@ class Progress(BaseModel):
     next_milestone_reward: int = 50
 
 
+class LeaderEntry(BaseModel):
+    rank: int
+    user_id: str
+    display_name: str
+    avatar_url: Optional[str] = None
+    sound_balance: int
+    streak: int
+    xp: int
+
+
+class TokenTransaction(BaseModel):
+    id: str
+    user_id: str
+    delta: int  # negative = debit, positive = credit
+    reason: str
+    metadata: Optional[dict] = None
+    balance_after: int
+    created_at: str
+
+
+class RecordingMeta(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    duration_ms: int
+    mime_type: str
+    size_bytes: int
+    created_at: str
+
+
 class TTSBody(BaseModel):
     text: str
     voice: str = "alloy"
     speed: float = 1.0
     model: str = "tts-1"
+
+
+# ---------- Token economy constants ----------
+ACTION_COSTS = {
+    "tts": 1,
+    "stt": 1,
+    "save_recording": 1,
+    "publish_album": 3,
+    "go_live": 3,
+}
+
+
+async def debit_tokens(user_id: str, amount: int, reason: str, metadata: Optional[dict] = None) -> dict:
+    """
+    Atomically debit `amount` tokens from a user. Raises HTTPException(402) on
+    insufficient balance. Returns the post-debit progress doc + transaction.
+    """
+    if amount <= 0:
+        raise ValueError("debit amount must be positive")
+    res = await db.progress.find_one_and_update(
+        {"user_id": user_id, "sound_balance": {"$gte": amount}},
+        {"$inc": {"sound_balance": -amount}},
+        projection={"_id": 0},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not res:
+        # Either user has no progress doc, or insufficient balance
+        existing = await db.progress.find_one({"user_id": user_id}, {"_id": 0})
+        if not existing:
+            await ensure_progress(user_id)
+        bal = (existing or {}).get("sound_balance", 0)
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient $SOUND balance: need {amount}, have {bal}",
+        )
+    tx = {
+        "id": uuid.uuid4().hex,
+        "user_id": user_id,
+        "delta": -amount,
+        "reason": reason,
+        "metadata": metadata or {},
+        "balance_after": res["sound_balance"],
+        "created_at": now_utc().isoformat(),
+    }
+    await db.token_transactions.insert_one(tx)
+    tx.pop("_id", None)
+    return {"progress": res, "transaction": tx}
+
+
+async def credit_tokens(user_id: str, amount: int, reason: str, metadata: Optional[dict] = None) -> dict:
+    if amount <= 0:
+        raise ValueError("credit amount must be positive")
+    res = await db.progress.find_one_and_update(
+        {"user_id": user_id},
+        {"$inc": {"sound_balance": amount}},
+        projection={"_id": 0},
+        return_document=ReturnDocument.AFTER,
+        upsert=False,
+    )
+    if not res:
+        await ensure_progress(user_id)
+        res = await db.progress.find_one_and_update(
+            {"user_id": user_id},
+            {"$inc": {"sound_balance": amount}},
+            projection={"_id": 0},
+            return_document=ReturnDocument.AFTER,
+        )
+    tx = {
+        "id": uuid.uuid4().hex,
+        "user_id": user_id,
+        "delta": amount,
+        "reason": reason,
+        "metadata": metadata or {},
+        "balance_after": res["sound_balance"],
+        "created_at": now_utc().isoformat(),
+    }
+    await db.token_transactions.insert_one(tx)
+    tx.pop("_id", None)
+    return {"progress": res, "transaction": tx}
 
 
 # ---------- Helpers ----------
@@ -258,7 +368,7 @@ async def ensure_progress(user_id: str):
     if existing:
         return existing
     doc = {
-        "user_id": user_id, "sound_balance": 0, "xp": 0, "streak": 0, "best_streak": 0,
+        "user_id": user_id, "sound_balance": 50, "xp": 0, "streak": 0, "best_streak": 0,
         "multiplier": 1.0, "total_tracks": 0, "week_creations": 0,
         "last_claim_at": None, "next_milestone": 30, "next_milestone_reward": 50,
     }
@@ -462,6 +572,118 @@ async def create_status(body: StatusCreate, authorization: Optional[str] = Heade
     return Status(**doc)
 
 
+# ---------- Leaderboard ----------
+@api_router.get("/leaderboard", response_model=List[LeaderEntry])
+async def leaderboard(sort: str = "balance", limit: int = 20):
+    sort_key = {"balance": "sound_balance", "streak": "streak", "xp": "xp"}.get(sort, "sound_balance")
+    pipeline = [
+        {"$sort": {sort_key: -1, "user_id": 1}},
+        {"$limit": min(max(limit, 1), 100)},
+        {"$lookup": {"from": "users", "localField": "user_id", "foreignField": "user_id", "as": "u"}},
+        {"$unwind": {"path": "$u", "preserveNullAndEmptyArrays": True}},
+        {"$project": {
+            "_id": 0,
+            "user_id": 1,
+            "sound_balance": 1,
+            "streak": 1,
+            "xp": 1,
+            "display_name": {"$ifNull": ["$u.display_name", "$user_id"]},
+            "avatar_url": "$u.avatar_url",
+        }},
+    ]
+    rows = await db.progress.aggregate(pipeline).to_list(100)
+    return [LeaderEntry(
+        rank=i + 1,
+        user_id=r["user_id"],
+        display_name=r.get("display_name") or r["user_id"],
+        avatar_url=r.get("avatar_url"),
+        sound_balance=r.get("sound_balance", 0),
+        streak=r.get("streak", 0),
+        xp=r.get("xp", 0),
+    ) for i, r in enumerate(rows)]
+
+
+# ---------- Recordings (save full takes) ----------
+@api_router.post("/me/recordings", response_model=RecordingMeta)
+async def save_recording(
+    audio: UploadFile = File(...),
+    title: str = Form("Untitled Take"),
+    duration_ms: int = Form(0),
+    authorization: Optional[str] = Header(None),
+):
+    user = await resolve_user_from_authorization(authorization)
+    raw = await audio.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="empty audio upload")
+    if len(raw) > AUDIO_MAX_BYTES:
+        raise HTTPException(status_code=413, detail=f"audio exceeds {AUDIO_MAX_BYTES} bytes")
+    rec_id = uuid.uuid4().hex
+    debited = await debit_tokens(user["user_id"], ACTION_COSTS["save_recording"], "save_recording", {"recording_id": rec_id})
+    mime = audio.content_type or "audio/m4a"
+    b64 = base64.b64encode(raw).decode("ascii")
+    doc = {
+        "id": rec_id,
+        "user_id": user["user_id"],
+        "title": (title or "Untitled Take")[:120],
+        "duration_ms": max(0, int(duration_ms or 0)),
+        "mime_type": mime,
+        "size_bytes": len(raw),
+        "audio_base64": b64,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.recordings.insert_one(doc)
+    # Return without the heavy audio body
+    return RecordingMeta(
+        id=rec_id,
+        user_id=user["user_id"],
+        title=doc["title"],
+        duration_ms=doc["duration_ms"],
+        mime_type=mime,
+        size_bytes=doc["size_bytes"],
+        created_at=doc["created_at"],
+    )
+
+
+@api_router.get("/me/recordings", response_model=List[RecordingMeta])
+async def list_recordings(authorization: Optional[str] = Header(None)):
+    user = await resolve_user_from_authorization(authorization)
+    docs = await db.recordings.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0, "audio_base64": 0},
+    ).sort("created_at", -1).to_list(100)
+    return [RecordingMeta(**d) for d in docs]
+
+
+@api_router.get("/me/recordings/{rec_id}/audio")
+async def get_recording_audio(rec_id: str, authorization: Optional[str] = Header(None)):
+    user = await resolve_user_from_authorization(authorization)
+    doc = await db.recordings.find_one({"id": rec_id, "user_id": user["user_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="recording not found")
+    return {
+        "id": doc["id"],
+        "audio_base64": doc["audio_base64"],
+        "mime_type": doc.get("mime_type", "audio/m4a"),
+        "title": doc.get("title", "Untitled Take"),
+    }
+
+
+# ---------- Token transactions ----------
+@api_router.get("/me/transactions", response_model=List[TokenTransaction])
+async def list_transactions(authorization: Optional[str] = Header(None)):
+    user = await resolve_user_from_authorization(authorization)
+    docs = await db.token_transactions.find(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    return [TokenTransaction(**d) for d in docs]
+
+
+@api_router.get("/me/costs")
+async def get_costs(authorization: Optional[str] = Header(None)):
+    await resolve_user_from_authorization(authorization)
+    return ACTION_COSTS
+
+
 # ---------- Audius ----------
 def _audius_track_to_dict(t: dict) -> dict:
     user = t.get("user") or {}
@@ -517,13 +739,14 @@ async def audius_stream_url(track_id: str):
 # ---------- AI Voice (TTS + Whisper via Emergent LLM key) ----------
 @api_router.post("/ai/tts")
 async def ai_tts(body: TTSBody, authorization: Optional[str] = Header(None)):
-    await resolve_user_from_authorization(authorization)
+    user = await resolve_user_from_authorization(authorization)
     if not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=503, detail="LLM key not configured")
     if not body.text or not body.text.strip():
         raise HTTPException(status_code=400, detail="text is required")
     if len(body.text) > 4096:
         raise HTTPException(status_code=400, detail="text exceeds 4096 chars")
+    debited = await debit_tokens(user["user_id"], ACTION_COSTS["tts"], "tts", {"voice": body.voice})
     tts = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY)
     try:
         b64 = await tts.generate_speech_base64(
@@ -531,11 +754,21 @@ async def ai_tts(body: TTSBody, authorization: Optional[str] = Header(None)):
             speed=body.speed, response_format="mp3",
         )
     except ValueError as ve:
+        # Refund on validation failure
+        await credit_tokens(user["user_id"], ACTION_COSTS["tts"], "tts_refund", {"err": str(ve)})
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
+        await credit_tokens(user["user_id"], ACTION_COSTS["tts"], "tts_refund", {"err": str(e)})
         logger.exception("TTS failed")
         raise HTTPException(status_code=502, detail=f"TTS provider error: {e}")
-    return {"audio_base64": b64, "mime_type": "audio/mpeg", "voice": body.voice, "model": body.model}
+    return {
+        "audio_base64": b64,
+        "mime_type": "audio/mpeg",
+        "voice": body.voice,
+        "model": body.model,
+        "tokens_spent": ACTION_COSTS["tts"],
+        "balance": debited["progress"]["sound_balance"],
+    }
 
 
 @api_router.post("/ai/stt")
@@ -639,6 +872,12 @@ async def startup():
     await db.news.create_index("id", unique=True)
     await db.statuses.create_index([("user_id", 1), ("created_at", -1)])
     await db.progress.create_index("user_id", unique=True)
+    await db.progress.create_index([("sound_balance", -1)])
+    await db.progress.create_index([("streak", -1)])
+    await db.progress.create_index([("xp", -1)])
+    await db.token_transactions.create_index([("user_id", 1), ("created_at", -1)])
+    await db.recordings.create_index([("user_id", 1), ("created_at", -1)])
+    await db.recordings.create_index("id", unique=True)
     if await db.artists.count_documents({}) == 0:
         await db.artists.insert_many(SEED_ARTISTS)
     if await db.tracks.count_documents({}) == 0:

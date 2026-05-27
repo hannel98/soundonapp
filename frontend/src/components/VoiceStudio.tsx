@@ -63,10 +63,12 @@ export default function VoiceStudio() {
     }
   }, [ttsUri, ttsPlayer]);
 
-  // ---------- STT ----------
+  // ---------- STT / Save Recording ----------
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [recMode, setRecMode] = useState<"transcribe" | "save">("transcribe");
   const [recState, setRecState] = useState<"idle" | "asking" | "recording" | "uploading" | "blocked">("idle");
   const [transcript, setTranscript] = useState<string>("");
+  const [savedMsg, setSavedMsg] = useState<string>("");
   const startTime = useRef<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -88,6 +90,7 @@ export default function VoiceStudio() {
 
   const startRecording = async () => {
     setTranscript("");
+    setSavedMsg("");
     setRecState("asking");
     const ok = await askMicPermission();
     if (!ok) return;
@@ -107,24 +110,30 @@ export default function VoiceStudio() {
     }
   };
 
-  const stopAndTranscribe = async () => {
+  const stopAndProcess = async () => {
     if (recState !== "recording") return;
     setRecState("uploading");
     if (tick.current) {
       clearInterval(tick.current);
       tick.current = null;
     }
+    const durationMs = (elapsed || 0) * 1000;
     try {
       await recorder.stop();
       const uri = recorder.uri;
       if (!uri) throw new Error("No recording uri");
-      // expo-audio HIGH_QUALITY preset produces m4a on iOS/Android, webm on web
       const mime = Platform.OS === "web" ? "audio/webm" : "audio/m4a";
-      const res = await api.sttUpload(uri, mime);
-      setTranscript(res.text || "(no speech detected)");
+      if (recMode === "transcribe") {
+        const res = await api.sttUpload(uri, mime);
+        setTranscript(res.text || "(no speech detected)");
+      } else {
+        const title = `Take ${new Date().toLocaleTimeString()}`;
+        const meta = await api.saveRecording(uri, mime, title, durationMs);
+        setSavedMsg(`Saved "${meta.title}" • ${Math.round(meta.size_bytes / 1024)} KB`);
+      }
       setRecState("idle");
     } catch (e: any) {
-      Alert.alert("Transcribe error", e?.message || "Could not transcribe");
+      Alert.alert(recMode === "transcribe" ? "Transcribe error" : "Save error", e?.message || "Failed");
       setRecState("idle");
     }
   };
@@ -200,8 +209,27 @@ export default function VoiceStudio() {
       )}
 
       <View style={[styles.sectionHead, { marginTop: 28 }]}>
-        <Text style={styles.kicker}>WHISPER STT</Text>
-        <Text style={styles.h2}>Record bars → Lyrics</Text>
+        <Text style={styles.kicker}>RECORD</Text>
+        <Text style={styles.h2}>{recMode === "transcribe" ? "Bars → Lyrics" : "Save full take"}</Text>
+      </View>
+
+      <View style={styles.modeRow}>
+        <TouchableOpacity
+          testID="voice-mode-transcribe"
+          onPress={() => setRecMode("transcribe")}
+          style={[styles.modeBtn, recMode === "transcribe" && styles.modeBtnActive]}
+        >
+          <Ionicons name="text" size={14} color={recMode === "transcribe" ? "#0A0A0C" : colors.textSecondary} />
+          <Text style={[styles.modeText, recMode === "transcribe" && styles.modeTextActive]}>Transcribe (1 token)</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID="voice-mode-save"
+          onPress={() => setRecMode("save")}
+          style={[styles.modeBtn, recMode === "save" && styles.modeBtnActive]}
+        >
+          <Ionicons name="save" size={14} color={recMode === "save" ? "#0A0A0C" : colors.textSecondary} />
+          <Text style={[styles.modeText, recMode === "save" && styles.modeTextActive]}>Save take (1 token)</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.recordCard}>
@@ -235,17 +263,21 @@ export default function VoiceStudio() {
             </View>
             <TouchableOpacity
               testID="voice-studio-stop"
-              onPress={stopAndTranscribe}
+              onPress={stopAndProcess}
               style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
             >
               <Ionicons name="stop" size={18} color="#fff" />
-              <Text style={[styles.primaryBtnText, { color: "#fff" }]}>Stop & Transcribe</Text>
+              <Text style={[styles.primaryBtnText, { color: "#fff" }]}>
+                {recMode === "transcribe" ? "Stop & Transcribe" : "Stop & Save"}
+              </Text>
             </TouchableOpacity>
           </>
         ) : recState === "uploading" ? (
           <>
             <ActivityIndicator color={colors.primary} />
-            <Text style={styles.uploadingText}>Transcribing via Whisper...</Text>
+            <Text style={styles.uploadingText}>
+              {recMode === "transcribe" ? "Transcribing via Whisper..." : "Saving take..."}
+            </Text>
           </>
         ) : (
           <TouchableOpacity
@@ -258,6 +290,13 @@ export default function VoiceStudio() {
           </TouchableOpacity>
         )}
       </View>
+
+      {savedMsg.length > 0 && (
+        <View style={styles.transcriptCard} testID="voice-studio-saved">
+          <Text style={styles.transcriptKicker}>SAVED</Text>
+          <Text style={styles.transcriptText}>{savedMsg}</Text>
+        </View>
+      )}
 
       {transcript.length > 0 && (
         <View style={styles.transcriptCard} testID="voice-studio-transcript">
@@ -318,6 +357,24 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   primaryBtnText: { color: "#0A0A0C", fontWeight: "900", fontSize: 15, letterSpacing: 0.4 },
+  modeRow: { flexDirection: "row", gap: 8, paddingHorizontal: spacing.lg, marginBottom: 10 },
+  modeBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 40,
+  },
+  modeBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  modeText: { color: colors.textSecondary, fontWeight: "700", fontSize: 12 },
+  modeTextActive: { color: "#0A0A0C", fontWeight: "800" },
   playbackRow: {
     marginHorizontal: spacing.lg,
     marginTop: 12,
