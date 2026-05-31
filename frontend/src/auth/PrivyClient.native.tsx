@@ -1,41 +1,62 @@
+// Gated native loader.
+// `@privy-io/expo` pulls `viem` which calls Node-only `crypto.isKeyObject`
+// at import time. In Expo Go (where native modules aren't built-in) this
+// crashes the bundle. So:
+//   * If we're in Expo Go => behave like the web stub (no Privy)
+//   * Otherwise (dev / production native build) => load the real SDK
 import React from "react";
 import Constants from "expo-constants";
-import {
-  PrivyProvider,
-  useLoginWithEmail,
-  usePrivy,
-  useEmbeddedEthereumWallet,
-  getAccessToken,
-} from "@privy-io/expo";
 
-export const PRIVY_AVAILABLE = true;
+const isExpoGo = Constants.executionEnvironment === "storeClient";
+
+let PrivyMod: any = null;
+if (!isExpoGo) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
+    PrivyMod = require("@privy-io/expo");
+  } catch (e) {
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn("[Privy] native SDK not available:", (e as Error)?.message);
+    }
+    PrivyMod = null;
+  }
+}
+
+export const PRIVY_AVAILABLE = !!PrivyMod;
 
 const PRIVY_APP_ID =
   (process.env.EXPO_PUBLIC_PRIVY_APP_ID as string | undefined) ||
-  (Constants.expoConfig?.extra as any)?.privyAppId ||
+  ((Constants.expoConfig?.extra as any)?.privyAppId as string | undefined) ||
   "cmph5sy0r00om0bldredscqru";
-const PRIVY_CLIENT_ID =
-  (process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID as string | undefined) ||
-  (Constants.expoConfig?.extra as any)?.privyClientId;
 
 export function PrivyAppProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <PrivyProvider appId={PRIVY_APP_ID} clientId={PRIVY_CLIENT_ID as any}>
-      {children}
-    </PrivyProvider>
-  );
+  if (!PrivyMod?.PrivyProvider) return <>{children}</>;
+  const Provider = PrivyMod.PrivyProvider;
+  return <Provider appId={PRIVY_APP_ID}>{children}</Provider>;
 }
 
 export function usePrivyEmailLogin() {
-  // Privy's hook returns sendCode + loginWithCode + state.
-  const { sendCode, loginWithCode, state } = useLoginWithEmail();
+  if (!PrivyMod?.useLoginWithEmail) {
+    return {
+      sendCode: async (_email: string) => {
+        throw new Error("Privy login is only available on iOS/Android dev builds");
+      },
+      loginWithCode: async (_code: string): Promise<string> => {
+        throw new Error("Privy login is only available on iOS/Android dev builds");
+      },
+      state: { status: "initial" },
+    };
+  }
+  // Privy hook
+  const { sendCode, loginWithCode, state } = PrivyMod.useLoginWithEmail();
   return {
     sendCode: async (email: string) => {
       await sendCode({ email });
     },
     loginWithCode: async (code: string): Promise<string> => {
       await loginWithCode({ code });
-      const token = await getAccessToken();
+      const getToken = PrivyMod.getAccessToken;
+      const token = getToken ? await getToken() : null;
       if (!token) throw new Error("Privy did not return an access token");
       return token;
     },
@@ -44,20 +65,24 @@ export function usePrivyEmailLogin() {
 }
 
 export function usePrivyState() {
-  const p = usePrivy();
-  return { ready: (p as any).isReady ?? true, authenticated: (p as any).user != null, user: (p as any).user };
+  if (!PrivyMod?.usePrivy) return { ready: true, authenticated: false, user: null as any };
+  const p = PrivyMod.usePrivy();
+  return {
+    ready: (p as any).isReady ?? true,
+    authenticated: (p as any).user != null,
+    user: (p as any).user,
+  };
 }
 
 export async function privyLogout() {
-  try {
-    // logout() is exposed on usePrivy() return value - but cannot use hook here.
-    // The Privy SDK auto-handles session via secure store; the simplest is to
-    // call the hook from a component. We'll just rely on internal JWT clear.
-  } catch {}
+  return;
 }
 
 export function useEthEmbeddedWallet() {
-  const w = useEmbeddedEthereumWallet();
+  if (!PrivyMod?.useEmbeddedEthereumWallet) {
+    return { wallets: [] as { address: string; chainType: string }[], ready: true };
+  }
+  const w = PrivyMod.useEmbeddedEthereumWallet();
   const ws = (w as any).wallets || [];
   return {
     wallets: ws.map((x: any) => ({ address: x.address, chainType: "ethereum" })),
