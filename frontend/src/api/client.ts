@@ -301,6 +301,59 @@ export const api = {
     }>,
   privyWallets: () =>
     request("/privy/wallets", { auth: true }) as Promise<{ wallets: any[]; privy_did: string }>,
+
+  // My tracks (record + upload)
+  myTracks: () => request("/me/tracks", { auth: true }) as Promise<any[]>,
+  uploadTrack: (body: {
+    title: string;
+    genre?: string;
+    bpm?: number;
+    mime: string;
+    duration_s?: number;
+    audio_b64: string;
+    cover_url?: string;
+    cover_b64?: string;
+    source?: "record" | "upload";
+    is_beat?: boolean;
+  }) =>
+    request("/me/tracks", { method: "POST", body, auth: true }) as Promise<{
+      track: any;
+      sound_awarded: number;
+      balance: number;
+    }>,
+  deleteMyTrack: (id: string) =>
+    request(`/me/tracks/${id}`, { method: "DELETE", auth: true }),
+  myTrackAudioUrl: (id: string) => `${BASE}/api/me/tracks/${id}/audio`,
+
+  // Promo (Base mainnet native ETH claim, first N wallets)
+  promoStatus: (wallet_address?: string) => {
+    const qs = wallet_address ? `?wallet_address=${wallet_address}` : "";
+    return request(`/promo/status${qs}`) as Promise<{
+      slots_taken: number;
+      slots_left: number;
+      total_slots: number;
+      reward_eth: number;
+      chain_id: number;
+      rpc: string;
+      my_claim: { slot: number; tx_hash: string; timestamp: number } | null;
+      funded: boolean;
+    }>;
+  },
+  promoClaim: (wallet_address: string) =>
+    request("/promo/claim", {
+      method: "POST",
+      body: { wallet_address },
+      auth: true,
+    }) as Promise<{
+      ok: boolean;
+      wallet: string;
+      tx_hash: string;
+      slot: number;
+      slots_left: number;
+      reward_eth: number;
+      explorer_url: string;
+    }>,
+  promoRecent: () => request("/promo/recent") as Promise<any[]>,
 };
 
 export type User = {

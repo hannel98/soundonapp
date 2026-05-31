@@ -14,7 +14,9 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Record vocals to transcribe into lyrics.",
         "NSLocationWhenInUseUsageDescription": "Track miles and reward safe driving with $SOUND.",
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
@@ -50,7 +52,8 @@
           "backgroundColor": "#0A0A0C"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

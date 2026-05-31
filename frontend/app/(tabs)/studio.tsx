@@ -145,6 +145,58 @@ export default function Studio() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            testID="studio-record-btn"
+            onPress={() => router.push("/studio/record" as any)}
+            style={styles.gameCta}
+          >
+            <Ionicons name="mic" size={20} color={colors.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gameCtaTitle}>Record Beat / Vocal</Text>
+              <Text style={styles.gameCtaSub}>Up to 3 min • +20 $SOUND</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="studio-upload-btn"
+            onPress={() => router.push("/studio/upload" as any)}
+            style={styles.gameCta}
+          >
+            <Ionicons name="cloud-upload" size={20} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gameCtaTitle}>Upload Beat</Text>
+              <Text style={styles.gameCtaSub}>MP3 / WAV / M4A • +20 $SOUND</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="studio-mytracks-btn"
+            onPress={() => router.push("/me/tracks" as any)}
+            style={styles.gameCta}
+          >
+            <Ionicons name="library" size={20} color="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gameCtaTitle}>My Tracks</Text>
+              <Text style={styles.gameCtaSub}>Library + play + delete</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="studio-lyrics-btn"
+            onPress={() => router.push("/studio/lyrics" as any)}
+            style={styles.gameCta}
+          >
+            <Ionicons name="document-text" size={20} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gameCtaTitle}>Lyrics AI Comparator</Text>
+              <Text style={styles.gameCtaSub}>Drake, Taylor Swift, Kendrick…</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
             testID="studio-rhythm-game-btn"
             onPress={() => router.push("/games/rhythm" as any)}
             style={styles.gameCta}

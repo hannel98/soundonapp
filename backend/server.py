@@ -27,6 +27,8 @@ from routes import iap as iap_module
 from routes import collab as collab_module
 from routes import lyrics as lyrics_module
 from routes import privy as privy_module
+from routes import tracks as tracks_module
+from routes import promo as promo_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1316,6 +1318,25 @@ privy_module.register(api_router, {
     "db": db,
     "issue_jwt": issue_jwt,
     "users_col": db.users,
+})
+tracks_module.register(api_router, {
+    "resolve_user": resolve_user_from_authorization,
+    "db": db,
+    "credit_tokens": credit_tokens,
+})
+
+
+async def _resolve_user_opt(authorization: Optional[str]):
+    if not authorization:
+        return None
+    try:
+        return await resolve_user_from_authorization(authorization)
+    except Exception:
+        return None
+
+
+promo_module.register(api_router, {
+    "resolve_user_opt": _resolve_user_opt,
 })
 app.include_router(api_router)
 app.add_middleware(

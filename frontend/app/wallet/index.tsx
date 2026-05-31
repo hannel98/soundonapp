@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -14,6 +14,9 @@ export default function WalletScreen() {
   const [loading, setLoading] = useState(true);
   const privyState = usePrivyState();
   const privyEth = useEthEmbeddedWallet();
+  const [promo, setPromo] = useState<any>(null);
+  const [manualAddr, setManualAddr] = useState("");
+  const [claiming, setClaiming] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -25,12 +28,40 @@ export default function WalletScreen() {
       } catch {
         setServerWallets(null);
       }
+      const primary = (privyEth.wallets[0]?.address) || (serverWallets && serverWallets[0]?.address) || manualAddr || undefined;
+      try {
+        const p = await api.promoStatus(primary);
+        setPromo(p);
+      } catch {}
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [privyEth.wallets, serverWallets, manualAddr]);
 
   useEffect(() => { load(); }, [load]);
+
+  const claim = async (wallet: string) => {
+    if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+      return Alert.alert("Wallet", "Enter a valid 0x address");
+    }
+    setClaiming(true);
+    try {
+      const res = await api.promoClaim(wallet);
+      Alert.alert(
+        "Reward sent 🎉",
+        `Slot #${res.slot}\nTx: ${res.tx_hash.slice(0, 10)}…`,
+        [
+          { text: "OK" },
+          { text: "View on BaseScan", onPress: () => Linking.openURL(res.explorer_url) },
+        ],
+      );
+      load();
+    } catch (e: any) {
+      Alert.alert("Claim failed", e?.message || "Try again");
+    } finally {
+      setClaiming(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -40,9 +71,12 @@ export default function WalletScreen() {
     );
   }
 
-  // Prefer wallets returned by Privy SDK directly (on-device).
-  // Fallback to server-side enumeration via Privy server API.
   const wallets = privyEth.wallets.length > 0 ? privyEth.wallets : (serverWallets || []);
+  const primaryWallet = wallets[0]?.address || manualAddr;
+  const slotsTaken = promo?.slots_taken ?? 0;
+  const slotsTotal = promo?.total_slots ?? 100;
+  const pct = slotsTotal > 0 ? Math.min(100, Math.floor((slotsTaken / slotsTotal) * 100)) : 0;
+  const alreadyClaimed = !!promo?.my_claim;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -70,8 +104,63 @@ export default function WalletScreen() {
           <View style={styles.warn}>
             <Ionicons name="information-circle" size={20} color={colors.primary} />
             <Text style={styles.warnText}>
-              Privy native SDK needs an iOS/Android dev build. Tap "Publish" (top right) to build. The web preview can't render real Privy wallets.
+              Privy native SDK needs an iOS/Android dev build. Web preview can't render real Privy wallets.
             </Text>
+          </View>
+        )}
+
+        {/* Promo claim card */}
+        {promo && (
+          <View style={styles.promoCard}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={styles.promoTitle}>🎁 Launch Promo: {promo.reward_eth} ETH</Text>
+              <Text style={styles.promoChain}>Base mainnet</Text>
+            </View>
+            <Text style={styles.promoBody}>
+              First {slotsTotal} wallets to claim earn native ETH on Base.
+            </Text>
+            <View style={styles.progressBg}><View style={[styles.progressFg, { width: `${pct}%` }]} /></View>
+            <Text style={styles.slots}>{slotsTaken} / {slotsTotal} claimed · {promo.slots_left} left</Text>
+
+            {alreadyClaimed ? (
+              <View style={[styles.claimDone]}>
+                <Ionicons name="checkmark-circle" size={20} color={colors.token} />
+                <Text style={styles.claimDoneText}>Claimed slot #{promo.my_claim.slot}</Text>
+                {promo.my_claim.tx_hash && (
+                  <TouchableOpacity onPress={() => Linking.openURL(`https://basescan.org/tx/${promo.my_claim.tx_hash}`)}>
+                    <Text style={styles.txLink}>View tx →</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : !promo.funded ? (
+              <Text style={styles.helper}>Promo wallet not funded yet. Admin must set PROMO_WALLET_PRIVATE_KEY.</Text>
+            ) : promo.slots_left <= 0 ? (
+              <Text style={styles.helper}>All {slotsTotal} slots claimed — thanks for the early support!</Text>
+            ) : primaryWallet ? (
+              <TouchableOpacity onPress={() => claim(primaryWallet)} disabled={claiming} style={[styles.claimBtn, claiming && { opacity: 0.6 }]} testID="promo-claim-btn">
+                {claiming ? <ActivityIndicator color="#0A0A0C" /> : (
+                  <>
+                    <Ionicons name="gift" size={18} color="#0A0A0C" />
+                    <Text style={styles.claimBtnText}>Claim {promo.reward_eth} ETH to {primaryWallet.slice(0, 6)}…{primaryWallet.slice(-4)}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TextInput
+                  value={manualAddr}
+                  onChangeText={setManualAddr}
+                  placeholder="0x... your Base address"
+                  placeholderTextColor={colors.textTertiary}
+                  autoCapitalize="none"
+                  style={styles.input}
+                  testID="promo-addr-input"
+                />
+                <TouchableOpacity onPress={() => claim(manualAddr)} disabled={claiming || !manualAddr} style={[styles.claimBtn, (claiming || !manualAddr) && { opacity: 0.6 }]} testID="promo-claim-manual">
+                  <Text style={styles.claimBtnText}>Claim now</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         )}
 
@@ -79,7 +168,7 @@ export default function WalletScreen() {
           <View style={styles.card}>
             <Ionicons name="checkmark-circle" size={28} color={colors.token} />
             <Text style={styles.cardTitle}>Privy account linked</Text>
-            <Text style={styles.cardBody}>You're signed in via Privy. Embedded wallets below are held in Privy custody on your device.</Text>
+            <Text style={styles.cardBody}>You're signed in via Privy. Wallets below are held in Privy custody on your device.</Text>
           </View>
         )}
 
@@ -99,7 +188,7 @@ export default function WalletScreen() {
             <Ionicons name="wallet" size={48} color={colors.primary} />
             <Text style={styles.cardTitle}>No wallet yet</Text>
             <Text style={styles.cardBody}>
-              Sign in with Privy from the login screen to get an embedded Ethereum wallet. Pay for $SOUND boosts and sign on-chain actions.
+              Sign in with Privy from the login screen to get an embedded Ethereum wallet, or paste an address above to claim the promo.
             </Text>
             <TouchableOpacity onPress={() => router.push("/login")} style={styles.primaryBtn} testID="wal-login-cta">
               <Ionicons name="link" size={18} color="#0A0A0C" />
@@ -130,4 +219,18 @@ const styles = StyleSheet.create({
   walletChain: { color: colors.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
   walletAddr: { color: "#fff", fontSize: 13, fontWeight: "700" },
   walletClient: { color: colors.textTertiary, fontSize: 11 },
+  promoCard: { backgroundColor: "rgba(0,82,255,0.08)", padding: 16, borderRadius: radius.lg, borderColor: "#0052FF", borderWidth: 1, gap: 10 },
+  promoTitle: { color: "#fff", fontWeight: "900", fontSize: 17 },
+  promoChain: { color: "#0052FF", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+  promoBody: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
+  progressBg: { height: 6, backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" },
+  progressFg: { height: "100%", backgroundColor: "#0052FF" },
+  slots: { color: colors.textTertiary, fontSize: 12 },
+  helper: { color: colors.textTertiary, fontSize: 12 },
+  input: { backgroundColor: colors.elevated, borderWidth: 1, borderColor: colors.border, color: "#fff", borderRadius: radius.md, padding: 12, fontSize: 13, minHeight: 44 },
+  claimBtn: { flexDirection: "row", gap: 8, backgroundColor: colors.primary, paddingVertical: 12, borderRadius: radius.full, alignItems: "center", justifyContent: "center", minHeight: 46 },
+  claimBtnText: { color: "#0A0A0C", fontWeight: "900", fontSize: 13 },
+  claimDone: { flexDirection: "row", alignItems: "center", gap: 8 },
+  claimDoneText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+  txLink: { color: "#0052FF", fontSize: 12, fontWeight: "700", marginLeft: 4 },
 });
