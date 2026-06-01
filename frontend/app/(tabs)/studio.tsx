@@ -197,6 +197,19 @@ export default function Studio() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            testID="studio-chat-btn"
+            onPress={() => router.push("/chat" as any)}
+            style={styles.gameCta}
+          >
+            <Ionicons name="chatbubbles" size={20} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gameCtaTitle}>Mesh Chat (BitChat)</Text>
+              <Text style={styles.gameCtaSub}>#bitchat · geohash · encrypted DMs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
             testID="studio-rhythm-game-btn"
             onPress={() => router.push("/games/rhythm" as any)}
             style={styles.gameCta}

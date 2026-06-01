@@ -256,6 +256,11 @@ export default function Profile() {
               <Text style={styles.tileLabel}>Wallet</Text>
               <Text style={styles.tileSub}>Privy</Text>
             </TouchableOpacity>
+            <TouchableOpacity testID="tile-chat" style={styles.tile} onPress={() => router.push("/chat")}>
+              <Ionicons name="chatbubbles" size={26} color={colors.primary} />
+              <Text style={styles.tileLabel}>Mesh Chat</Text>
+              <Text style={styles.tileSub}>BitChat · Nostr</Text>
+            </TouchableOpacity>
             <TouchableOpacity testID="tile-collab-mine" style={styles.tile} onPress={() => router.push("/collab/me")}>
               <Ionicons name="people-circle" size={26} color={colors.primary} />
               <Text style={styles.tileLabel}>My Collabs</Text>
