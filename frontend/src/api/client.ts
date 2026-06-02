@@ -354,6 +354,18 @@ export const api = {
       explorer_url: string;
     }>,
   promoRecent: () => request("/promo/recent") as Promise<any[]>,
+
+  ytFeatured: (limit = 6) =>
+    request(`/youtube/featured?limit=${limit}`) as Promise<
+      {
+        handle: string;
+        channel_id: string;
+        display_name: string;
+        url: string;
+        category: string;
+        videos: { video_id: string; title: string; url: string; thumb_url: string; published: string }[];
+      }[]
+    >,
 };
 
 export type User = {

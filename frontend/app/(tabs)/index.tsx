@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -51,6 +52,7 @@ export default function Home() {
   const { user } = useAuth();
   const { play } = usePlayer();
   const [featured, setFeatured] = useState<Artist[]>([]);
+  const [ytChannels, setYtChannels] = useState<any[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,14 +60,16 @@ export default function Home() {
 
   const load = async () => {
     try {
-      const [a, t, p] = await Promise.all([
+      const [a, t, p, yt] = await Promise.all([
         api.artists(true),
         api.trending("24h"),
         user ? api.progress().catch(() => null) : Promise.resolve(null),
+        api.ytFeatured(6).catch(() => []),
       ]);
       setFeatured(a);
       setTracks(t);
       setProgress(p);
+      setYtChannels(yt as any[]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -174,6 +178,39 @@ export default function Home() {
             </TouchableOpacity>
           )}
         />
+
+        {/* Featured YouTube Channels (RSS-driven, no API key) */}
+        {ytChannels.length > 0 && (
+          <>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>📺 Featured on YouTube</Text>
+              <Text style={styles.sectionMeta}>{ytChannels[0]?.display_name}</Text>
+            </View>
+            <FlatList
+              data={ytChannels.flatMap((c) => c.videos.map((v: any) => ({ ...v, channel: c })))}
+              keyExtractor={(v) => v.video_id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: 12 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  testID={`yt-${item.video_id}`}
+                  style={styles.ytCard}
+                  onPress={() => Linking.openURL(item.url)}
+                >
+                  <Image source={{ uri: item.thumb_url }} style={styles.ytThumb} />
+                  <View style={styles.ytPlayOverlay}>
+                    <Ionicons name="play" size={22} color="#fff" />
+                  </View>
+                  <View style={styles.ytMeta}>
+                    <Text style={styles.ytChannel} numberOfLines={1}>{item.channel.display_name}</Text>
+                    <Text style={styles.ytTitle} numberOfLines={2}>{item.title}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
+          </>
+        )}
 
         {/* Trending tracks */}
         <View style={styles.sectionHead}>
@@ -310,6 +347,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: "800" },
   sectionMeta: { color: colors.textTertiary, fontSize: 12 },
+  ytCard: { width: 240, backgroundColor: colors.surface, borderRadius: 12, borderColor: colors.border, borderWidth: 1, overflow: "hidden" },
+  ytThumb: { width: "100%", height: 135, backgroundColor: "#000" },
+  ytPlayOverlay: { position: "absolute", top: 50, left: 100, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,0,0,0.85)", alignItems: "center", justifyContent: "center" },
+  ytMeta: { padding: 10, gap: 4 },
+  ytChannel: { color: colors.primary, fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+  ytTitle: { color: "#fff", fontSize: 13, fontWeight: "700", lineHeight: 18 },
   artistCard: {
     width: 220,
     backgroundColor: colors.surface,

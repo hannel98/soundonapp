@@ -29,6 +29,7 @@ from routes import lyrics as lyrics_module
 from routes import privy as privy_module
 from routes import tracks as tracks_module
 from routes import promo as promo_module
+from routes import youtube as youtube_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1338,6 +1339,7 @@ async def _resolve_user_opt(authorization: Optional[str]):
 promo_module.register(api_router, {
     "resolve_user_opt": _resolve_user_opt,
 })
+youtube_module.register(api_router, {})
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
