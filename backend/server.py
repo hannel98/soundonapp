@@ -1289,21 +1289,36 @@ async def startup():
     await db.collab_applications.create_index("applicant_id")
     await db.lyric_analyses.create_index([("user_id", 1), ("created_at", -1)])
     await db.users.create_index("privy_did", sparse=True)
-    # === Migrate stock pexels cover URLs to branded SoundMesh SVG covers ===
+    # === Migrate stock cover / image URLs to branded SoundMesh SVG covers ===
     from urllib.parse import quote as _q
     BRAND_BASE = "/api/branding/cover.svg"
-    async def _rebrand(col, title_field: str = "title"):
-        cursor = col.find({"cover_url": {"$regex": "images.pexels.com|images.unsplash.com|placeholder.com"}})
+
+    def _brand(name: str, seed_val: str) -> str:
+        return f"{BRAND_BASE}?title={_q(name)}&seed={_q(seed_val)}"
+
+    async def _rebrand_field(col, field: str, title_field: str = "title", only_stock: bool = True):
+        q: dict = {field: {"$exists": True, "$ne": None, "$ne": ""}}
+        if only_stock:
+            q[field] = {
+                "$regex": "images.pexels.com|images.unsplash.com|placeholder.com|via.placeholder|loremflickr",
+                "$options": "i",
+            }
+        cursor = col.find(q)
         async for d in cursor:
             t = (d.get(title_field) or d.get("name") or "SoundMesh")
-            new = f"{BRAND_BASE}?title={_q(t)}&seed={_q(str(d.get('id') or t))}"
-            await col.update_one({"_id": d["_id"]}, {"$set": {"cover_url": new}})
+            new = _brand(t, str(d.get("id") or d.get("_id") or t))
+            await col.update_one({"_id": d["_id"]}, {"$set": {field: new}})
+
     try:
-        await _rebrand(db.tracks, "title")
-        await _rebrand(db.videos, "title")
-        await _rebrand(db.news, "title")
-        # artists also have cover_url
-        await _rebrand(db.artists, "name")
+        # Tracks / videos / news: only replace obvious stock hosts (leave YouTube thumbs alone)
+        await _rebrand_field(db.tracks, "cover_url", "title")
+        await _rebrand_field(db.videos, "cover_url", "title")
+        await _rebrand_field(db.news, "cover_url", "title")
+        # Artists: rebrand ALL image_url fields (regardless of source) so every artist
+        # shows the same SoundMesh aesthetic. Comment: user explicitly requested this.
+        await _rebrand_field(db.artists, "image_url", "name", only_stock=False)
+        await _rebrand_field(db.artists, "avatar_url", "name", only_stock=False)
+        await _rebrand_field(db.artists, "cover_url", "name", only_stock=False)
     except Exception as _e:
         print(f"[branding] migration skipped: {_e}")
 
