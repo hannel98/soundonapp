@@ -30,6 +30,7 @@ from routes import privy as privy_module
 from routes import tracks as tracks_module
 from routes import promo as promo_module
 from routes import youtube as youtube_module
+from routes import branding as branding_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1288,6 +1289,23 @@ async def startup():
     await db.collab_applications.create_index("applicant_id")
     await db.lyric_analyses.create_index([("user_id", 1), ("created_at", -1)])
     await db.users.create_index("privy_did", sparse=True)
+    # === Migrate stock pexels cover URLs to branded SoundMesh SVG covers ===
+    from urllib.parse import quote as _q
+    BRAND_BASE = "/api/branding/cover.svg"
+    async def _rebrand(col, title_field: str = "title"):
+        cursor = col.find({"cover_url": {"$regex": "images.pexels.com|images.unsplash.com|placeholder.com"}})
+        async for d in cursor:
+            t = (d.get(title_field) or d.get("name") or "SoundMesh")
+            new = f"{BRAND_BASE}?title={_q(t)}&seed={_q(str(d.get('id') or t))}"
+            await col.update_one({"_id": d["_id"]}, {"$set": {"cover_url": new}})
+    try:
+        await _rebrand(db.tracks, "title")
+        await _rebrand(db.videos, "title")
+        await _rebrand(db.news, "title")
+        # artists also have cover_url
+        await _rebrand(db.artists, "name")
+    except Exception as _e:
+        print(f"[branding] migration skipped: {_e}")
 
 
 @app.on_event("shutdown")
@@ -1340,6 +1358,7 @@ promo_module.register(api_router, {
     "resolve_user_opt": _resolve_user_opt,
 })
 youtube_module.register(api_router, {})
+branding_module.register(api_router, {})
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,

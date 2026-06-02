@@ -29,7 +29,7 @@ export default function MyTracksScreen() {
       id: `me_${t.id}`,
       title: t.title,
       artist: t.artist || "You",
-      cover_url: t.cover_url || "https://images.pexels.com/photos/1763075/pexels-photo-1763075.jpeg?auto=compress&cs=tinysrgb&w=600",
+      cover_url: t.cover_url || `${(process as any).env.EXPO_PUBLIC_BACKEND_URL || ""}/api/branding/cover.svg?title=${encodeURIComponent(t.title || "Track")}&seed=${encodeURIComponent(t.id || "")}`,
       stream_url: stream,
       external_url: null,
     });
