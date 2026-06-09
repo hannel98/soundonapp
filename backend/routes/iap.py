@@ -28,14 +28,22 @@ router = APIRouter(prefix="/iap", tags=["iap"])
 
 # SKU mapping. Keep server-side - the client must not be trusted for grants.
 TOKEN_PACKS = {
-    "sound_tokens_100": {"tokens": 100, "price": "$0.99", "label": "Starter Pack"},
-    "sound_tokens_500": {"tokens": 500, "price": "$3.99", "label": "Boost Pack"},
-    "sound_tokens_1200": {"tokens": 1200, "price": "$7.99", "label": "Pro Pack"},
-    "sound_tokens_5000": {"tokens": 5000, "price": "$24.99", "label": "Studio Pack"},
+    "sound_tokens_10": {"tokens": 10, "price": "$5.00", "label": "Starter Pack"},
+    "sound_tokens_40": {"tokens": 40, "price": "$10.00", "label": "Boost Pack"},
+    "sound_tokens_80": {"tokens": 80, "price": "$25.00", "label": "Pro Pack"},
+    "sound_tokens_200": {"tokens": 200, "price": "$50.00", "label": "Studio Pack"},
 }
 SUBSCRIPTIONS = {
     "pro_monthly": {"price": "$4.99/mo", "duration_days": 30, "label": "SoundMesh Pro"},
 }
+# Token costs for in-app actions (server-authoritative)
+TOKEN_COSTS = {
+    "upload_music": 1,
+    "ai_album_cover": 2,
+    "go_live": 3,
+}
+# Pro perks: actions that are free for active Pro subscribers
+PRO_UNLIMITED = {"upload_music", "ai_album_cover", "ai_beat_generation"}
 
 
 class ValidateBody(BaseModel):
@@ -61,7 +69,52 @@ def register(api_router: APIRouter, dependencies: dict):
             "subscriptions": [
                 {"product_id": pid, **info} for pid, info in SUBSCRIPTIONS.items()
             ],
+            "token_costs": TOKEN_COSTS,
+            "pro_perks": [
+                "Unlimited AI Beat Generation",
+                "Unlimited AI Album Cover Generation",
+                "Pro AI Voices",
+                "Stem Export",
+                "Priority Processing",
+                "Advanced Creator Tools",
+            ],
         }
+
+    @router.post("/spend")
+    async def spend(body: dict, authorization: Optional[str] = Header(None)):
+        """Server-authoritative token spend for in-app actions.
+        Body: {"action": "upload_music"|"ai_album_cover"|"go_live", "ref"?: any}
+        """
+        user = await resolve_user(authorization)
+        action = (body.get("action") or "").strip()
+        if action not in TOKEN_COSTS:
+            raise HTTPException(status_code=400, detail="Unknown action")
+        cost = TOKEN_COSTS[action]
+        # Check Pro subscription - exempt some actions
+        if action in PRO_UNLIMITED:
+            sub = await db.subscriptions.find_one({"user_id": user["user_id"]})
+            if sub and sub.get("expires_at"):
+                exp = sub["expires_at"]
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                if exp > datetime.now(timezone.utc):
+                    return {"ok": True, "cost": 0, "balance": None, "pro": True}
+        # Debit
+        ledger = db.users
+        user_doc = await ledger.find_one({"user_id": user["user_id"]})
+        if not user_doc or (user_doc.get("sound_balance") or 0) < cost:
+            raise HTTPException(status_code=402, detail=f"Not enough $SOUND (need {cost})")
+        new_bal = (user_doc.get("sound_balance") or 0) - cost
+        await ledger.update_one({"user_id": user["user_id"]}, {"$set": {"sound_balance": new_bal}})
+        await db.token_ledger.insert_one({
+            "user_id": user["user_id"],
+            "action": action,
+            "delta": -cost,
+            "balance": new_bal,
+            "ref": body.get("ref"),
+            "created_at": datetime.now(timezone.utc),
+        })
+        return {"ok": True, "cost": cost, "balance": new_bal, "pro": False}
 
     @router.post("/validate")
     async def validate(body: ValidateBody, authorization: Optional[str] = Header(None)):
