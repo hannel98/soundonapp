@@ -111,37 +111,46 @@ user_problem_statement: |
 backend:
   - task: "POST /api/iap/spend deducts correct cost per action and 402s on insufficient balance"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routes/iap.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Endpoint already existed. Confirmed TOKEN_COSTS = upload_music:1, ai_album_cover:2, go_live:3. Pro users free for upload_music + ai_album_cover."
+      - working: true
+        agent: "testing"
+        comment: "11/11 pytest tests PASS. All actions debit correct cost from db.progress.sound_balance, log to db.token_ledger, 402 on insufficient with 'Not enough $SOUND' detail, 400 on unknown action, 401 on missing auth. Pro user gets cost:0/pro:true (balance:null) for upload_music + ai_album_cover; go_live still charges 3 for Pro."
   - task: "POST /api/me/tracks no longer auto-rewards +20 $SOUND (cost is paid via /iap/spend)"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routes/tracks.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Set TRACK_REWARD_BASE = 0 and skip credit_tokens call when reward is 0. Response still returns balance and sound_awarded:0."
+        comment: "Set TRACK_REWARD_BASE = 0 and skip credit_tokens call when reward is 0."
+      - working: true
+        agent: "testing"
+        comment: "Verified sound_awarded:0 in response and db.progress.sound_balance is unchanged by track upload."
   - task: "POST /api/albums charges 2 $SOUND (was 3)"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Updated ACTION_COSTS.publish_album from 3 -> 2 so album creation pre-debits 2 tokens via debit_tokens."
+        comment: "Updated ACTION_COSTS.publish_album from 3 -> 2."
+      - working: true
+        agent: "testing"
+        comment: "Balance decreases by 2 on success (or net 1 with half-refund when Gemini key invalid — tested in env with bad key, fallback path works)."
 
 frontend:
   - task: "Studio Upload pre-charges 1 $SOUND via /iap/spend before publishing"
