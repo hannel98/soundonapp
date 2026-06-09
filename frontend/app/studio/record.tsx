@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import {
   useAudioRecorder,
   useAudioPlayer,
@@ -22,6 +22,7 @@ import {
   setAudioModeAsync,
 } from "expo-audio";
 import { api } from "@/src/api/client";
+import { spendOr } from "@/src/utils/spend";
 import { colors, radius, spacing } from "@/src/theme";
 
 const MAX_SECONDS = 180;
@@ -103,6 +104,9 @@ export default function RecordScreen() {
     if (title.trim().length < 1) return Alert.alert("Title", "Give it a title");
     setUploading(true);
     try {
+      // Pre-charge 1 $SOUND (free for Pro subscribers)
+      const spent = await spendOr("upload_music", router, { title: title.trim() });
+      if (!spent) { setUploading(false); return; }
       let b64: string;
       let mime = "audio/m4a";
       if (Platform.OS === "web") {
@@ -137,8 +141,8 @@ export default function RecordScreen() {
         is_beat: isBeat,
       });
       Alert.alert(
-        "Uploaded",
-        `+${res.sound_awarded} $SOUND awarded\nBalance: ${res.balance}`,
+        "Published",
+        `Spent ${spent.cost} $SOUND\nBalance: ${res.balance ?? "—"}`,
       );
       router.replace("/me/tracks");
     } catch (e: any) {

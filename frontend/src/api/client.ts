@@ -225,6 +225,15 @@ export const api = {
     request("/iap/catalog") as Promise<{
       token_packs: { product_id: string; tokens: number; price: string; label: string }[];
       subscriptions: { product_id: string; price: string; duration_days: number; label: string }[];
+      token_costs?: Record<string, number>;
+      pro_perks?: string[];
+    }>,
+  iapSpend: (action: "upload_music" | "ai_album_cover" | "go_live", ref?: any) =>
+    request("/iap/spend", { method: "POST", body: { action, ref }, auth: true }) as Promise<{
+      ok: boolean;
+      cost: number;
+      balance: number | null;
+      pro: boolean;
     }>,
   iapValidate: (body: {
     platform: "ios" | "android";

@@ -49,7 +49,7 @@ export default function AlbumGenerator() {
             </View>
           </View>
           <Text style={styles.subtitle}>
-            Bundle your tracks with an AI-generated cover. Costs 3 $SOUND.
+            Bundle your tracks with an AI-generated cover. Costs 2 $SOUND.
           </Text>
 
           {result && (
@@ -93,7 +93,7 @@ export default function AlbumGenerator() {
             {loading ? <ActivityIndicator color="#0A0A0C" /> : (
               <>
                 <Ionicons name="sparkles" size={18} color="#0A0A0C" />
-                <Text style={styles.primaryBtnText}>Generate Album • 3 $SOUND</Text>
+                <Text style={styles.primaryBtnText}>Generate Album · 2 $SOUND</Text>
               </>
             )}
           </TouchableOpacity>

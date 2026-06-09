@@ -1,0 +1,40 @@
+{
+  "summary": "Backend-only testing of new $SOUND token-spend wiring. Wrote /app/backend/tests/test_iap_spend.py (11 tests, pytest, JUnit XML at /app/test_reports/pytest/pytest_results.xml). 11/11 PASSED. Verified: /api/iap/catalog returns token_costs {upload_music:1, ai_album_cover:2, go_live:3} + pro_perks; /api/iap/spend correctly debits db.progress.sound_balance and writes db.token_ledger entries for each action; unknown action -> 400 'Unknown action'; insufficient balance -> 402 with 'Not enough $SOUND' detail; missing auth -> 401; Pro subscriber (active sub in db.subscriptions) gets cost:0/pro:true on upload_music & ai_album_cover with balance unchanged, while go_live is still charged (not in PRO_UNLIMITED, matches code); /api/iap/subscription returns active:false when none exists; POST /api/me/tracks returns sound_awarded:0 and does NOT mutate db.progress.sound_balance (returned balance == DB value); POST /api/albums debited 1 or 2 $SOUND (accepted half-refund path when Gemini image gen errors).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/iap/spend (Pro)", "issue": "Response body has balance:null for Pro path. Frontend should treat null as 'unchanged' (already implied) but documenting that balance is intentionally None for pro responses (iap.py line 112)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iap_spend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: align FastAPI 'on_event' deprecation -> use lifespan handlers (server.py:1239,1327). Non-blocking.",
+    "Optional: PRO_UNLIMITED includes 'ai_beat_generation' but no /iap/spend caller charges that action yet; either wire it or remove from set to avoid dead config (iap.py:46).",
+    "Optional: /api/iap/spend returns balance:null for Pro path - if frontend needs the current balance for UI, consider returning the unchanged sound_balance instead of None (iap.py:112)."
+  ],
+  "critical_code_review_comments": [
+    "debit_tokens (server.py:319) is atomic via find_one_and_update with $gte guard - correct race-free pattern.",
+    "iap.py spend handler correctly maps debit_tokens HTTPException(402) to a friendlier 'Not enough $SOUND (need N)' message, satisfying the 402 contract for the /store deep-link.",
+    "tracks.py TRACK_REWARD_BASE=0 - upload endpoint reads current balance from db.progress and never mutates it, exactly as specified.",
+    "/api/albums still uses ACTION_COSTS['publish_album']=2 (server.py:309) - matches the new 'AI Album Cover = 2 $SOUND' spec. Half-refund (credit 1) on image-gen failure works."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iap_spend.py (new)",
+    "/app/test_reports/pytest/pytest_results.xml (regenerated)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Each test signs up a fresh TEST_iap_<ts>_<rand>@example.com user (starts with 50 $SOUND), then directly sets db.progress.sound_balance to a known value before spend assertions. Pro test inserts a temporary db.subscriptions doc with future expires_at and cleans it up in finally.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use EXPO_PUBLIC_BACKEND_URL (frontend/.env) as BASE_URL - this project doesn't define EXPO_BACKEND_URL. test_iap_spend.py loads /app/backend/.env to reach MongoDB directly for balance setup/verification. Tests are idempotent and self-cleanup (TEST_-prefixed users + temp subscriptions removed). To rerun: `pytest /app/backend/tests/test_iap_spend.py -v`.",
+  "rca_of_issue": "N/A - all assertions passed. Token-spend wiring matches the new pricing tier exactly."
+}

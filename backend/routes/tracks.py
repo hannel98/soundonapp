@@ -20,7 +20,7 @@ ALLOWED_MIME = {
     "audio/mp4", "audio/m4a", "audio/aac",
     "audio/ogg", "audio/webm", "audio/flac",
 }
-TRACK_REWARD_BASE = 20  # $SOUND per accepted upload (scaled by progress.multiplier)
+TRACK_REWARD_BASE = 0  # No upload reward; uploads now COST 1 $SOUND via /iap/spend
 
 
 class TrackUploadBody(BaseModel):
@@ -113,12 +113,18 @@ def register(api_router: APIRouter, dependencies: dict):
             "created_at": datetime.now(timezone.utc),
         }
         await db.user_tracks.insert_one(doc)
-        # Credit $SOUND
-        credit = await credit_tokens(
-            user["user_id"], TRACK_REWARD_BASE, "track_upload",
-            {"track_id": track_id, "source": doc["source"], "is_beat": doc["is_beat"]},
-        )
-        balance = credit["progress"]["sound_balance"]
+        # Uploads no longer auto-credit $SOUND (frontend pre-charges 1 $SOUND via /iap/spend).
+        # If TRACK_REWARD_BASE > 0 we still credit, otherwise just look up the current balance.
+        balance = None
+        if TRACK_REWARD_BASE > 0:
+            credit = await credit_tokens(
+                user["user_id"], TRACK_REWARD_BASE, "track_upload",
+                {"track_id": track_id, "source": doc["source"], "is_beat": doc["is_beat"]},
+            )
+            balance = credit["progress"]["sound_balance"]
+        else:
+            prog = await db.progress.find_one({"user_id": user["user_id"]}, {"_id": 0, "sound_balance": 1})
+            balance = (prog or {}).get("sound_balance", 0)
         # Build response without binary payload
         clean = {k: v for k, v in doc.items() if k not in ("audio_b64", "cover_b64", "_id")}
         clean["created_at"] = doc["created_at"].isoformat()

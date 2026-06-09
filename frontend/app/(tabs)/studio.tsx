@@ -152,7 +152,7 @@ export default function Studio() {
             <Ionicons name="mic" size={20} color={colors.accent} />
             <View style={{ flex: 1 }}>
               <Text style={styles.gameCtaTitle}>Record Beat / Vocal</Text>
-              <Text style={styles.gameCtaSub}>Up to 3 min • +20 $SOUND</Text>
+              <Text style={styles.gameCtaSub}>Up to 3 min · costs 1 $SOUND</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -165,7 +165,20 @@ export default function Studio() {
             <Ionicons name="cloud-upload" size={20} color={colors.primary} />
             <View style={{ flex: 1 }}>
               <Text style={styles.gameCtaTitle}>Upload Beat</Text>
-              <Text style={styles.gameCtaSub}>MP3 / WAV / M4A • +20 $SOUND</Text>
+              <Text style={styles.gameCtaSub}>MP3 / WAV / M4A · costs 1 $SOUND</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="studio-live-btn"
+            onPress={() => router.push("/live" as any)}
+            style={styles.gameCta}
+          >
+            <Ionicons name="radio" size={20} color="#ff3b30" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gameCtaTitle}>Go Live</Text>
+              <Text style={styles.gameCtaSub}>Start a broadcast · costs 3 $SOUND</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -230,7 +243,7 @@ export default function Studio() {
             <Ionicons name="albums" size={20} color={colors.token} />
             <View style={{ flex: 1 }}>
               <Text style={styles.gameCtaTitle}>AI Album Generator</Text>
-              <Text style={styles.gameCtaSub}>Bundle tracks + AI cover art • 3 $SOUND</Text>
+              <Text style={styles.gameCtaSub}>Bundle tracks + AI cover art · 2 $SOUND</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>

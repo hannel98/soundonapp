@@ -310,7 +310,7 @@ ACTION_COSTS = {
     "tts": 1,
     "stt": 1,
     "save_recording": 1,
-    "publish_album": 3,
+    "publish_album": 2,
     "go_live": 3,
     "post": 0,
 }
@@ -1339,6 +1339,7 @@ iap_module.register(api_router, {
     "resolve_user": resolve_user_from_authorization,
     "db": db,
     "credit_tokens": credit_tokens,
+    "debit_tokens": debit_tokens,
 })
 collab_module.register(api_router, {
     "resolve_user": resolve_user_from_authorization,

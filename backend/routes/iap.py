@@ -59,6 +59,7 @@ def register(api_router: APIRouter, dependencies: dict):
     resolve_user = dependencies["resolve_user"]
     db = dependencies["db"]
     credit_tokens = dependencies["credit_tokens"]
+    debit_tokens = dependencies.get("debit_tokens")
 
     @router.get("/catalog")
     async def catalog():
@@ -98,20 +99,34 @@ def register(api_router: APIRouter, dependencies: dict):
                 if exp.tzinfo is None:
                     exp = exp.replace(tzinfo=timezone.utc)
                 if exp > datetime.now(timezone.utc):
+                    # Pro: still log a zero-cost ledger entry for analytics
+                    await db.token_ledger.insert_one({
+                        "user_id": user["user_id"],
+                        "action": action,
+                        "delta": 0,
+                        "balance": None,
+                        "ref": body.get("ref"),
+                        "pro": True,
+                        "created_at": datetime.now(timezone.utc),
+                    })
                     return {"ok": True, "cost": 0, "balance": None, "pro": True}
-        # Debit
-        ledger = db.users
-        user_doc = await ledger.find_one({"user_id": user["user_id"]})
-        if not user_doc or (user_doc.get("sound_balance") or 0) < cost:
-            raise HTTPException(status_code=402, detail=f"Not enough $SOUND (need {cost})")
-        new_bal = (user_doc.get("sound_balance") or 0) - cost
-        await ledger.update_one({"user_id": user["user_id"]}, {"$set": {"sound_balance": new_bal}})
+        # Debit via shared helper (writes to db.progress.sound_balance)
+        if debit_tokens is None:
+            raise HTTPException(status_code=500, detail="debit_tokens not configured")
+        try:
+            debited = await debit_tokens(user["user_id"], cost, f"spend_{action}", {"ref": body.get("ref")})
+        except HTTPException as he:
+            if he.status_code == 402:
+                raise HTTPException(status_code=402, detail=f"Not enough $SOUND (need {cost})")
+            raise
+        new_bal = debited["progress"]["sound_balance"]
         await db.token_ledger.insert_one({
             "user_id": user["user_id"],
             "action": action,
             "delta": -cost,
             "balance": new_bal,
             "ref": body.get("ref"),
+            "pro": False,
             "created_at": datetime.now(timezone.utc),
         })
         return {"ok": True, "cost": cost, "balance": new_bal, "pro": False}

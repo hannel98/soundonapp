@@ -14,8 +14,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { api } from "@/src/api/client";
+import { spendOr } from "@/src/utils/spend";
 import { colors, radius, spacing } from "@/src/theme";
 
 export default function UploadBeatScreen() {
@@ -54,6 +55,9 @@ export default function UploadBeatScreen() {
     if (title.trim().length < 1) return Alert.alert("Title", "Enter a title");
     setUploading(true);
     try {
+      // Pre-charge 1 $SOUND (free for Pro subscribers)
+      const spent = await spendOr("upload_music", router, { title: title.trim() });
+      if (!spent) { setUploading(false); return; }
       let b64: string;
       if (Platform.OS === "web") {
         const res = await fetch(picked.uri);
@@ -79,7 +83,10 @@ export default function UploadBeatScreen() {
         source: "upload",
         is_beat: isBeat,
       });
-      Alert.alert("Uploaded", `+${res.sound_awarded} $SOUND\nBalance: ${res.balance}`);
+      Alert.alert(
+        "Published",
+        `Spent ${spent.cost} $SOUND\nBalance: ${res.balance ?? "—"}`,
+      );
       router.replace("/me/tracks");
     } catch (e: any) {
       Alert.alert("Upload", e?.message || "Failed");
@@ -141,7 +148,7 @@ export default function UploadBeatScreen() {
               {uploading ? <ActivityIndicator color="#0A0A0C" /> : (
                 <>
                   <Ionicons name="cloud-upload" size={18} color="#0A0A0C" />
-                  <Text style={styles.primaryBtnText}>Publish & earn $SOUND</Text>
+                  <Text style={styles.primaryBtnText}>Publish · 1 $SOUND</Text>
                 </>
               )}
             </TouchableOpacity>

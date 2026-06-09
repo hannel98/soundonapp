@@ -101,3 +101,131 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Wire $SOUND token debits into core monetized actions per the new pricing tier:
+  Upload Music = 1 $SOUND, AI Album Cover = 2 $SOUND, Go Live = 3 $SOUND.
+  Pro subscribers get unlimited Upload + AI Album. Insufficient-balance should show
+  a friendly Top-up flow that deep-links to /store.
+
+backend:
+  - task: "POST /api/iap/spend deducts correct cost per action and 402s on insufficient balance"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/iap.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Endpoint already existed. Confirmed TOKEN_COSTS = upload_music:1, ai_album_cover:2, go_live:3. Pro users free for upload_music + ai_album_cover."
+  - task: "POST /api/me/tracks no longer auto-rewards +20 $SOUND (cost is paid via /iap/spend)"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/tracks.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Set TRACK_REWARD_BASE = 0 and skip credit_tokens call when reward is 0. Response still returns balance and sound_awarded:0."
+  - task: "POST /api/albums charges 2 $SOUND (was 3)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Updated ACTION_COSTS.publish_album from 3 -> 2 so album creation pre-debits 2 tokens via debit_tokens."
+
+frontend:
+  - task: "Studio Upload pre-charges 1 $SOUND via /iap/spend before publishing"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/studio/upload.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Calls spendOr('upload_music') before api.uploadTrack. On 402 (insufficient) shows alert with 'Top up' → router.push('/store'). Button copy updated to 'Publish · 1 $SOUND'."
+  - task: "Studio Record pre-charges 1 $SOUND via /iap/spend before saving recording"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/studio/record.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Same spendOr('upload_music') flow as upload. Updated copy and removed +20 reward language."
+  - task: "/live screen pre-charges 3 $SOUND, then shows live-room stub (Agora pending)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/live/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "New screen. Pre-go-live preview → spendOr('go_live') → live-room with red LIVE pill, viewer/chat/tip counters, End Stream button. Pro users see 'Free'."
+  - task: "Studio tab adds Go Live tile and updates token-cost copy on tiles"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(tabs)/studio.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Record/Upload tiles updated from '+20 $SOUND' to 'costs 1 $SOUND'. Added 'Go Live · costs 3 $SOUND' tile. Album tile copy updated to '2 $SOUND'."
+  - task: "Insufficient-balance alert deep links to /store"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/utils/spend.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "spendOr helper: catches the 402 'Not enough $SOUND' error and shows Cancel/Top up alert that navigates to /store."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "POST /api/iap/spend deducts correct cost per action and 402s on insufficient balance"
+    - "POST /api/me/tracks no longer auto-rewards +20 $SOUND (cost is paid via /iap/spend)"
+    - "POST /api/albums charges 2 $SOUND (was 3)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Wired token debits for the new monetization model.
+      Backend: tracks.py reward set to 0; ACTION_COSTS.publish_album lowered to 2; /api/iap/spend already supports upload_music/ai_album_cover/go_live.
+      Frontend: spend helper at src/utils/spend.ts catches 402 and prompts "Top up" → /store. Studio Upload + Studio Record + new /live screen all call spendOr() before the paid action. Studio tab tile copy updated. Album generator tile + screen copy updated 3→2.
+      Please test BACKEND only first:
+        1) POST /api/iap/spend with action=upload_music (1), ai_album_cover (2), go_live (3) — verify cost, balance reduction, and idempotent ledger entry in db.token_ledger.
+        2) Insufficient balance → 402 with detail "Not enough $SOUND (need N)".
+        3) Active Pro subscription → upload_music and ai_album_cover return cost:0, pro:true.
+        4) Unknown action → 400.
+        5) POST /api/me/tracks → response has sound_awarded:0 and a real balance.
+        6) POST /api/albums charges 2 (not 3) — check balance delta.
+      Use /app/memory/test_credentials.md for demo user (demo@soundmesh.app / Demo12345). Top up balance via direct DB or /iap/validate sandbox if needed.
