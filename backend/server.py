@@ -31,6 +31,7 @@ from routes import tracks as tracks_module
 from routes import promo as promo_module
 from routes import youtube as youtube_module
 from routes import branding as branding_module
+from routes import ads as ads_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1374,6 +1375,11 @@ promo_module.register(api_router, {
 })
 youtube_module.register(api_router, {})
 branding_module.register(api_router, {})
+ads_module.register(api_router, {
+    "resolve_user": resolve_user_from_authorization,
+    "db": db,
+    "credit_tokens": credit_tokens,
+})
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,

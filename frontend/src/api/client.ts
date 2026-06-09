@@ -366,6 +366,13 @@ export const api = {
         videos: { video_id: string; title: string; url: string; thumb_url: string; published: string }[];
       }[]
     >,
+
+  adReward: (placement: string) =>
+    request("/ads/reward", { method: "POST", body: { placement }, auth: true }) as Promise<{
+      ok: boolean;
+      sound_awarded: number;
+      balance: number;
+    }>,
 };
 
 export type User = {
