@@ -1,6 +1,8 @@
+
 {
   "cli": {
-    "version": ">= 16.0.0"
+    "version": ">= 16.0.0",
+    "appDir": "frontend"
   },
   "build": {
     "development": {
@@ -16,3 +18,4 @@
     "production": {}
   }
 }
+
