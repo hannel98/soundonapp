@@ -1,21 +1,31 @@
 
 {
   "cli": {
-    "version": ">= 16.0.0",
-    "appDir": "frontend"
+    "version": ">= 7.0.0",
+    "appDir": "frontend",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     },
-    "production": {}
+    "production": {
+      "autoIncrement": true
+    }
   },
   "submit": {
     "production": {}
   }
 }
+
 
